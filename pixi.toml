@@ -1,0 +1,38 @@
+[workspace]
+name = "iot-ros"
+version = "0.1.0"
+channels = ["https://prefix.dev/robostack-jazzy", "conda-forge"]
+platforms = ["linux-64"]
+
+[tasks]
+build = "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
+clean = "rm -rf build install log"
+display = "ros2 launch iot_robot_description display.launch.py"
+
+[activation]
+scripts = ["scripts/activate.sh"]
+
+[dependencies]
+# Core ROS 2 — desktop brings RViz, robot_state_publisher, tf2
+ros-jazzy-desktop = "*"
+ros-jazzy-xacro = "*"
+
+# The shared control layer between sim and hardware
+ros-jazzy-ros2-control = "*"
+ros-jazzy-ros2-controllers = "*"
+
+# Simulation
+ros-jazzy-mujoco-ros2-control = "*"
+
+# Drive the robot with the keyboard
+ros-jazzy-teleop-twist-keyboard = "*"
+
+# Build toolchain. `compilers` pins a C/C++ toolchain matching the one the ROS
+# binaries were built with — avoids ABI mismatches when loading C++ plugins.
+compilers = "*"
+cmake = "*"
+ninja = "*"
+pkg-config = "*"
+colcon-common-extensions = "*"
+ros-jazzy-ament-cmake = "*"
+ros-jazzy-joint-state-publisher-gui = ">=2.4.3,<3"
