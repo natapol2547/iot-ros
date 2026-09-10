@@ -98,7 +98,7 @@
             <inertia ixx="0.000288" ixy="0" ixz="0" iyy="0.000288" iyz="0" izz="0.000568" />
         </inertial>
         <visual>
-            <origin xyz="0.000053 0 0" rpy="0 0 0" />
+            <origin xyz="0.00534 0 0" rpy="0 0 0" />
             <geometry>
                 <mesh filename="package://iot_robot_description/meshes/wheel_link_left_visual.stl" />
             </geometry>
@@ -117,7 +117,7 @@
             <inertia ixx="0.000288" ixy="0" ixz="0" iyy="0.000288" iyz="0" izz="0.000568" />
         </inertial>
         <visual>
-            <origin xyz="0.000053 0 0" rpy="0 0 0" />
+            <origin xyz="0.00534 0 0" rpy="0 0 0" />
             <geometry>
                 <mesh filename="package://iot_robot_description/meshes/wheel_link_right_visual.stl" />
             </geometry>
