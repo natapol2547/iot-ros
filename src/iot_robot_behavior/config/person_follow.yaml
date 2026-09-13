@@ -1,0 +1,20 @@
+person_detector:
+  ros__parameters:
+    input_size: 320
+    score_threshold: 0.4
+    keypoint_threshold: 0.5
+    person_height: 1.70
+    torso_ratio: 0.29
+    num_threads: 4
+    level_frame: base_link
+
+target_follower:
+  ros__parameters:
+    follow_distance: 1.5
+    linear_gain: 1.0
+    angular_gain: 2.5
+    max_linear: 0.5
+    max_angular: 2.0
+    lost_timeout: 1.0
+    search_angular: 0.8
+    search_pitch: -0.35

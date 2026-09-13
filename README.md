@@ -28,8 +28,25 @@ pixi run teleop       # (second terminal) drive with the keyboard
 pixi run follow       # (second terminal) detect and follow the yellow ball
 ```
 
-In the MuJoCo viewer, double-click a body to select it and Ctrl + right-drag to push it around.
-That is the easiest way to move the ball.
+To move the ball or the mannequin in the MuJoCo viewer:
+
+| Action | How |
+| --- | --- |
+| Select a body | Double-click it |
+| Drag it along the floor | Hold Ctrl + Shift and drag with the right mouse button |
+| Drag in the camera-facing plane | Hold Ctrl and drag with the right mouse button |
+| Rotate it | Hold Ctrl and drag with the left mouse button |
+| Deselect | Double-click empty space |
+
+The drag pulls the body like a spring. The mannequin's joint damping (`damping="300"` in
+`scene.xml`) makes it lag slightly and stop when released. Press F1 in the viewer for all bindings.
+
+Person following in the sim:
+
+```bash
+pixi run sim
+pixi run follow-person   # second terminal; drag the mannequin and the robot follows
+```
 
 Image topics can be viewed with:
 
@@ -52,6 +69,7 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `ball` | Runs the ball detector on its own |
 | `follow` | Ball detector + target follower |
 | `person` | Laptop webcam + person detector (Step 6) |
+| `follow-person` | Person detector + target follower in the sim (Step 6b) |
 
 `scripts/activate.sh` sources `install/setup.bash` on every `pixi run`, so built packages are
 always on the path.
@@ -63,7 +81,7 @@ src/
 ├── iot_robot_description   URDF/xacro, meshes, RViz display (ament_cmake)
 ├── iot_robot_mujoco        MuJoCo model inputs, ros2_control config, sim launch, twist_mux (ament_cmake)
 ├── iot_robot_perception    ball_detector, person_detector (ament_python)
-└── iot_robot_behavior      target_follower, ball_follow launch (ament_python)
+└── iot_robot_behavior      target_follower, ball_follow and person_follow launches (ament_python)
 ```
 
 `iot_robot_mujoco/urdf/iot_robot_sim.urdf.xacro` includes the description and adds the MuJoCo
@@ -75,8 +93,9 @@ plugin, so the description package stays shared between sim and hardware.
 ```
 MuJoCo camera ──► /camera/image_raw, /camera/camera_info, /camera/depth
                         │
-                ball_detector ──► /ball/position (PointStamped, camera_optical_frame)
-                        │         /ball/debug_image
+       ball_detector or person_detector ──► /ball/position or /person/position
+                        │                   (PointStamped, camera_optical_frame)
+                        │                   /ball/debug_image, /person/debug_image
                         ▼
                 target_follower ──► /gizmo_controller/commands (Float64MultiArray [yaw, pitch])
                         │
@@ -106,7 +125,9 @@ Other useful topics:
 | Gizmo yaw limits | −0.785 … 0.785 rad | URDF + `mujoco_inputs.xml` |
 | Gizmo pitch limits | −0.785 … 0 rad (negative tilts **up**) | URDF + `mujoco_inputs.xml` |
 | Camera | 640 × 480, vertical FOV 48.8°, fy ≈ 529 px, 15 Hz in sim | `mujoco_inputs.xml`, sim xacro |
-| Ball | 10 cm diameter, yellow | `mjcf/scene.xml` |
+| Ball | 10 cm diameter, yellow, starts 1 m ahead | `mjcf/scene.xml` |
+| Sim person | 1.70 m capsule mannequin, starts 2.5 m ahead; shoulders 1.38 m, hips 0.92 m | `mjcf/scene.xml` |
+| Follow distance | ball 0.6 m, person 1.5 m | `iot_robot_behavior/config/*.yaml` |
 
 ## Progress
 
@@ -114,8 +135,10 @@ Other useful topics:
 - [x] MuJoCo simulation with ros2_control, diff drive and keyboard teleop
 - [x] Step 4: ball detection with monocular distance
 - [x] Step 5: ball following with gizmo aiming, twist_mux teleop override, gizmo speed limit
-- [ ] Step 6: person detection with YOLO26n-pose on a laptop webcam (in progress)
-- [ ] Step 6b: follow a person; follower keeps the target in the `odom` frame between detections
+- [x] Step 6: person detection with YOLO26n-pose on a laptop webcam, calibrated, torso distance
+      checked with a tape measure
+- [x] Step 6b: follow a person (a draggable mannequin) in the sim. The follower keeps the target
+      in the `odom` frame between detections, and distance accounts for the camera's tilt
 - [ ] Step 7: re-identification, so the robot remembers one specific person
 - [ ] Step 8: real hardware (CubeMars motors, Pi camera, IMU, STM32 ultrasonics)
 
@@ -145,14 +168,25 @@ estimate against the depth camera. The error is below 1.5 % from 0.95 m to 3.7 m
 - **Why not the `ultralytics` Python package:** it pulls in PyTorch (about 4 GB with CUDA) and a
   pip OpenCV that conflicts with `cv_bridge`. `onnxruntime` from conda-forge is 16 MB and works
   the same way on the Pi.
-- **Distance:** shoulder-midpoint to hip-midpoint length, `L = person_height · torso_ratio`
-  (1.70 m · 0.29). With both points in normalised image coordinates, `Z = L / length`.
-  A torso stays in view up close, when the legs are cut off, and its length barely changes
-  when the person turns sideways.
+- **Distance:** uses the shoulder-midpoint to hip-midpoint length, `L = person_height · torso_ratio`
+  (1.70 m · 0.29). A torso stays in view up close, when the legs are cut off, and its length
+  barely changes when the person turns sideways.
+  - The node rotates the rays through the shoulder and hip midpoints into a level frame
+    (`level_frame`, e.g. `base_link`), so z points up.
+  - Because the torso is upright, the horizontal distance is `d = L / (tan(shoulder elevation) − tan(hip elevation))`.
+  - **Why not just `Z = L / projected length`:** that assumes the torso is parallel to the image
+    plane. A camera 0.23 m off the floor, tilted up at a person, sees the torso foreshortened.
+    In sim the simple formula read 2.0 m for a person 1.0 m away. The tilt-aware formula read
+    1.1 m. It was within 12 % at 1.5 m and within 5 % from 2 m to 4 m, including when the
+    mannequin was turned 45°.
+  - With `level_frame` empty (a webcam with no TF), the camera is assumed level. For a level
+    camera both formulas give the same answer.
 - **Target choice:** the largest person whose shoulders and hips are both visible. This is
   replaced by re-identification in Step 7.
 - **Licence:** YOLO26 weights are AGPL-3.0. That is fine for this project, but it matters if the
   robot or its software is ever distributed commercially.
+- **Accuracy:** after webcam calibration, distances at 1, 2 and 3 m matched a tape measure with
+  the default `torso_ratio` of 0.29.
 - **Speed:** about 6–8 Hz on the development laptop while the simulation is running. The
   Ultralytics Pi 5 benchmark suggests roughly 10 Hz at 320 px. This still needs to be measured.
 
@@ -212,7 +246,16 @@ To check the distance, stand at measured distances and watch
 
 ## Behaviour: target_follower
 
-- Transforms the target into `base_link`.
+One node follows both the ball and the person; only the launch file and config differ.
+
+- **Remembers the target in `odom`.** Each detection is transformed into `odom` using the TF at
+  the image timestamp. If the detection is newer than the latest TF, which happens with the fast
+  ball detector, it uses the latest TF instead.
+  - The 20 Hz control loop transforms the stored point back into `base_link` every cycle.
+  - This keeps steering and gizmo aiming correct between slow pose detections, even while the
+    robot turns.
+  - Before this change, the target was stored in `base_link`. A stored point is out of date as
+    soon as the robot moves.
 - Aims the gizmo:
   - yaw = bearing to the target (the yaw axis passes through the `base_link` origin);
   - pitch = −atan2(height, horizontal distance), measured from the `gizmo_pitch_link` origin.
@@ -220,10 +263,18 @@ To check the distance, stand at measured distances and watch
   - angular velocity is proportional to bearing;
   - linear velocity is proportional to `distance − follow_distance`, scaled by `cos(bearing)` so it
     only drives forward when roughly facing the target.
-- If there has been no detection for `lost_timeout`, it recentres the gizmo and spins towards
-  where the target was last seen.
+- If there has been no detection for `lost_timeout`, it sets gizmo yaw to 0 and pitch to
+  `search_pitch`, then spins towards where the target was last seen.
+  - For the ball, `search_pitch` is 0.
+  - For a person it is −0.35 rad (tilted up 20°). A level camera 0.23 m off the floor only sees
+    legs at 2.5 m, so the torso is never detected and the robot spins forever.
 
-Result in sim: the robot stops 0.60 m from the ball with the camera centred to within 0.3°.
+Results in sim:
+
+- **Ball:** the robot stops 0.60 m from it, with the camera centred to within 0.3°.
+- **Person:** the mannequin started 2 m away, 60° to the right, outside the camera's view. The robot
+  searched, found it, and settled 1.49 m away (target 1.50 m), pointing within 0.2° of it.
+  Detections came in at 4–13 Hz.
 
 ## Lessons learned
 
@@ -256,6 +307,11 @@ These cost real debugging time. Check here first when something similar breaks.
   them by stamp in the depth callback.
 - URDF joint velocity limits are only enforced when `enforce_command_limits: true` is set on
   `controller_manager`. To slow the gizmo down, lower `velocity` on the gizmo joints in the URDF.
+- YOLO does not recognise every simple shape as a person. A first mannequin made of a few blobby
+  capsules scored 0.02 at 1.5 m. Separate shoulders, a boxy torso, hips, sleeves and hair raised
+  that to 0.7–0.9 when facing or turned 45°. Side-on (90°) it is still not detected.
+- With the scene's `<compiler angle="radian">` (from the generated description), `euler` in
+  `scene.xml` is in radians, not degrees.
 
 ### ROS
 

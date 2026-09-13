@@ -10,7 +10,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from std_msgs.msg import Float64MultiArray
 from tf2_geometry_msgs import do_transform_point
-from tf2_ros import Buffer, TransformException, TransformListener
+from tf2_ros import Buffer, ExtrapolationException, TransformException, TransformListener
 
 
 def clamp(value, low, high):
@@ -33,11 +33,16 @@ class TargetFollower(Node):
         self.yaw_limit = self.declare_parameter("yaw_limit", 0.785398).value
         self.pitch_min = self.declare_parameter("pitch_min", -0.785398).value
         self.pitch_max = self.declare_parameter("pitch_max", 0.0).value
+        # Gizmo pitch while searching. A ball lies on the floor (0.0), but a person's
+        # torso is above a level camera's view unless the camera tilts up
+        self.search_pitch = self.declare_parameter("search_pitch", 0.0).value
+        # A frame that stays put while the robot moves
+        self.world_frame = self.declare_parameter("world_frame", "odom").value
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        self.target = None  # latest target position in base_link
+        self.target = None  # latest target position in world_frame
         self.last_seen = None  # node time of the latest detection
         self.last_bearing = 0.0
 
@@ -48,35 +53,25 @@ class TargetFollower(Node):
         self.create_timer(0.05, self.control_loop)
 
     def on_target(self, msg):
+        # Store the target in the world frame. Between detections the robot keeps
+        # turning and driving, and the stored point stays valid while it does
         try:
-            # Time() means "latest available". The image is usually newer than the
-            # latest TF (robot_state_publisher publishes at 20 Hz), so asking for the
-            # exact image stamp would fail with an extrapolation error
-            camera_to_base = self.tf_buffer.lookup_transform(
-                "base_link", msg.header.frame_id, Time())
-            pitch_joint = self.tf_buffer.lookup_transform(
-                "base_link", "gizmo_pitch_link", Time())
+            try:
+                # Where the camera was when the image was taken. Slow detectors (pose
+                # models) finish well after that, so this transform is usually available
+                camera_to_world = self.tf_buffer.lookup_transform(
+                    self.world_frame, msg.header.frame_id, Time.from_msg(msg.header.stamp))
+            except ExtrapolationException:
+                # Fast detectors can be newer than the latest TF; use the latest instead
+                camera_to_world = self.tf_buffer.lookup_transform(
+                    self.world_frame, msg.header.frame_id, Time())
         except TransformException as error:
             self.get_logger().warn(
                 f"TF lookup failed: {error}", throttle_duration_sec=2.0)
             return
 
-        self.target = do_transform_point(msg, camera_to_base).point
+        self.target = do_transform_point(msg, camera_to_world).point
         self.last_seen = self.get_clock().now()
-        self.last_bearing = math.atan2(self.target.y, self.target.x)
-
-        # Aim the gizmo. The yaw axis passes through the base_link origin and the camera
-        # sits (almost) on it, so the yaw angle is simply the bearing to the target
-        yaw = clamp(self.last_bearing, -self.yaw_limit, self.yaw_limit)
-        # The camera lies on the pitch link's x axis, so tilt that axis from the pitch
-        # joint towards the target. Positive pitch tilts down, so looking up is negative
-        origin = pitch_joint.transform.translation
-        height = self.target.z - origin.z
-        horizontal = math.hypot(self.target.x - origin.x,
-                                self.target.y - origin.y)
-        pitch = clamp(-math.atan2(height, horizontal),
-                      self.pitch_min, self.pitch_max)
-        self.gizmo_pub.publish(Float64MultiArray(data=[yaw, pitch]))
 
     def control_loop(self):
         cmd = TwistStamped()
@@ -85,21 +80,49 @@ class TargetFollower(Node):
 
         visible = (self.last_seen is not None
                    and self.get_clock().now() - self.last_seen < Duration(seconds=self.lost_timeout))
-        if visible:
-            distance = math.hypot(self.target.x, self.target.y)
-            bearing = math.atan2(self.target.y, self.target.x)
-            cmd.twist.angular.z = clamp(
-                self.angular_gain * bearing, -self.max_angular, self.max_angular)
-            # Only drive forward once roughly facing the target
-            heading_scale = max(0.0, math.cos(bearing))
-            cmd.twist.linear.x = heading_scale * clamp(
-                self.linear_gain * (distance - self.follow_distance), -self.max_linear, self.max_linear)
-        else:
+        if not visible:
             # Target lost: recentre the gizmo and turn towards where it was last seen
-            self.gizmo_pub.publish(Float64MultiArray(data=[0.0, 0.0]))
+            self.gizmo_pub.publish(Float64MultiArray(
+                data=[0.0, self.search_pitch]))
             cmd.twist.angular.z = math.copysign(
                 self.search_angular, self.last_bearing)
+            self.cmd_vel_pub.publish(cmd)
+            return
 
+        try:
+            world_to_base = self.tf_buffer.lookup_transform(
+                "base_link", self.world_frame, Time())
+            pitch_joint = self.tf_buffer.lookup_transform(
+                "base_link", "gizmo_pitch_link", Time())
+        except TransformException as error:
+            self.get_logger().warn(
+                f"TF lookup failed: {error}", throttle_duration_sec=2.0)
+            return
+
+        target = do_transform_point(
+            PointStamped(point=self.target), world_to_base).point
+        bearing = math.atan2(target.y, target.x)
+        distance = math.hypot(target.x, target.y)
+        self.last_bearing = bearing
+
+        # Aim the gizmo. The yaw axis passes through the base_link origin and the camera
+        # sits (almost) on it, so the yaw angle is simply the bearing to the target
+        yaw = clamp(bearing, -self.yaw_limit, self.yaw_limit)
+        # The camera lies on the pitch link's x axis, so tilt that axis from the pitch
+        # joint towards the target. Positive pitch tilts down, so looking up is negative
+        origin = pitch_joint.transform.translation
+        height = target.z - origin.z
+        horizontal = math.hypot(target.x - origin.x, target.y - origin.y)
+        pitch = clamp(-math.atan2(height, horizontal),
+                      self.pitch_min, self.pitch_max)
+        self.gizmo_pub.publish(Float64MultiArray(data=[yaw, pitch]))
+
+        cmd.twist.angular.z = clamp(
+            self.angular_gain * bearing, -self.max_angular, self.max_angular)
+        # Only drive forward once roughly facing the target
+        heading_scale = max(0.0, math.cos(bearing))
+        cmd.twist.linear.x = heading_scale * clamp(
+            self.linear_gain * (distance - self.follow_distance), -self.max_linear, self.max_linear)
         self.cmd_vel_pub.publish(cmd)
 
 
