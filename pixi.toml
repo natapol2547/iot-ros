@@ -8,6 +8,9 @@ platforms = ["linux-64"]
 build = "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
 clean = "rm -rf build install log"
 display = "ros2 launch iot_robot_description display.launch.py"
+mjcf = "xacro src/iot_robot_description/urdf/robot.urdf.xacro -o /tmp/iot_robot.urdf && ros2 run mujoco_ros2_control make_mjcf_from_robot_description.py --urdf /tmp/iot_robot.urdf --mujoco_inputs src/iot_robot_mujoco/mjcf/mujoco_inputs.xml --output src/iot_robot_mujoco/mjcf --add_free_joint --no-fuse --save_only"
+sim = { cmd = "ros2 launch iot_robot_mujoco sim.launch.py", depends-on = ["mjcf", "build"] }
+
 
 [activation]
 scripts = ["scripts/activate.sh"]
@@ -36,3 +39,8 @@ pkg-config = "*"
 colcon-common-extensions = "*"
 ros-jazzy-ament-cmake = "*"
 ros-jazzy-joint-state-publisher-gui = ">=2.4.3,<3"
+trimesh = ">=5.1.0,<6"
+
+[pypi-dependencies]
+mujoco = "==3.10.*"
+obj2mjcf = ">=0.0.25, <0.0.26"

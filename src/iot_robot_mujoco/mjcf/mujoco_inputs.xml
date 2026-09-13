@@ -1,0 +1,41 @@
+<mujoco_inputs>
+    <!-- Copied verbatim into the generated MJCF -->
+    <raw_inputs>
+        <option integrator="implicitfast" />
+
+        <!-- The converter tags every geom with class="visual" or class="collision";
+         MuJoCo refuses to load the model unless those classes exist. -->
+        <default>
+            <default class="visual">
+                <geom group="2" contype="0" conaffinity="0" />
+            </default>
+            <default class="collision">
+                <geom group="3" />
+            </default>
+        </default>
+
+        <actuator>
+            <!-- AK45-10: 7 N·m peak torque, 180 rpm (19 rad/s) output speed -->
+            <velocity name="wheel_joint_left" joint="wheel_joint_left" kv="1.0" ctrlrange="-19 19"
+                forcerange="-7 7" />
+            <velocity name="wheel_joint_right" joint="wheel_joint_right" kv="1.0" ctrlrange="-19 19"
+                forcerange="-7 7" />
+            <!-- Placeholder gains until the real pan/tilt servos are chosen -->
+            <position name="gizmo_yaw_joint" joint="gizmo_yaw_joint" kp="5" dampratio="1"
+                ctrlrange="-0.785398 0.785398" />
+            <position name="gizmo_pitch_joint" joint="gizmo_pitch_joint" kp="5" dampratio="1"
+                ctrlrange="-0.785398 0" />
+        </actuator>
+    </raw_inputs>
+
+    <!-- Tags the converter transforms before inserting -->
+    <processed_inputs>
+        <!-- Lift both casters 2 mm so the wheels carry the weight; casters only catch pitching -->
+        <modify_element type="body" name="caster_front" pos="0.141 0 0.002" />
+        <modify_element type="body" name="caster_back" pos="-0.141001 0 0.002126" />
+
+        <!-- Raspberry Pi Camera v2.1 (IMX219): 48.8° vertical FOV -->
+        <camera site="camera_optical_frame" name="camera" fovy="48.8" mode="fixed"
+            resolution="640 480" />
+    </processed_inputs>
+</mujoco_inputs>

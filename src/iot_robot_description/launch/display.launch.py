@@ -13,7 +13,13 @@ def generate_launch_description():
     # Run xacro at launch time and hand the expanded URDF to the publisher.
     # value_type=str is essential: without it the XML gets parsed as YAML and
     # you get a cryptic type error instead of a robot.
-    robot_description = ParameterValue(Command(["xacro ", urdf]), value_type=str)
+    robot_description = ParameterValue(
+        Command(["xacro ", urdf]), value_type=str)
+
+    # Rviz config
+    rviz_config = PathJoinSubstitution([
+        FindPackageShare("iot_robot_description"), "rviz", "display.rviz"
+    ])
 
     return LaunchDescription([
         # Reads the URDF + /joint_states, publishes the TF tree.
@@ -27,5 +33,11 @@ def generate_launch_description():
             package="joint_state_publisher_gui",
             executable="joint_state_publisher_gui",
         ),
-        Node(package="rviz2", executable="rviz2", output="screen"),
+        Node(
+            package="rviz2",
+            executable="rviz2",
+            arguments=["-d", rviz_config],
+            output="screen",
+        ),
+
     ])
