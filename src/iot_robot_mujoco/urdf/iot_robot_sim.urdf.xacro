@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="iot_robot">
+
+    <xacro:arg name="headless" default="false" />
+
+    <!-- The physical robot: links, joints, meshes, camera frames -->
+    <xacro:include filename="$(find iot_robot_description)/urdf/robot.urdf.xacro" />
+
+    <!-- Simulated hardware: MuJoCo plays the role of the motor drivers and camera -->
+    <ros2_control name="MujocoSystem" type="system">
+        <hardware>
+            <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+            <param name="mujoco_model">$(find iot_robot_mujoco)/mjcf/scene.xml</param>
+            <param name="headless">$(arg headless)</param>
+            <param name="camera_publish_rate">15.0</param>
+        </hardware>
+
+        <joint name="wheel_joint_left">
+            <command_interface name="velocity" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="wheel_joint_right">
+            <command_interface name="velocity" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+
+        <joint name="gizmo_yaw_joint">
+            <command_interface name="position" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+        <joint name="gizmo_pitch_joint">
+            <command_interface name="position" />
+            <state_interface name="position" />
+            <state_interface name="velocity" />
+        </joint>
+
+        <!-- Name must match the <camera name="..."> in mujoco_inputs.xml -->
+        <sensor name="camera">
+            <param name="frame_name">camera_optical_frame</param>
+            <param name="image_topic">/camera/image_raw</param>
+            <param name="info_topic">/camera/camera_info</param>
+            <param name="depth_topic">/camera/depth</param>
+        </sensor>
+    </ros2_control>
+
+</robot>

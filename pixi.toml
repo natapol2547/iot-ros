@@ -10,7 +10,7 @@ clean = "rm -rf build install log"
 display = "ros2 launch iot_robot_description display.launch.py"
 mjcf = "xacro src/iot_robot_description/urdf/robot.urdf.xacro -o /tmp/iot_robot.urdf && ros2 run mujoco_ros2_control make_mjcf_from_robot_description.py --urdf /tmp/iot_robot.urdf --mujoco_inputs src/iot_robot_mujoco/mjcf/mujoco_inputs.xml --output src/iot_robot_mujoco/mjcf --add_free_joint --no-fuse --save_only"
 sim = { cmd = "ros2 launch iot_robot_mujoco sim.launch.py", depends-on = ["mjcf", "build"] }
-
+teleop = "ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/diff_drive_controller/cmd_vel"
 
 [activation]
 scripts = ["scripts/activate.sh"]

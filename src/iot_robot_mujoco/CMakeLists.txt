@@ -3,7 +3,7 @@ project(iot_robot_mujoco)
 
 find_package(ament_cmake REQUIRED)
 
-install(DIRECTORY mjcf
+install(DIRECTORY config launch mjcf urdf
         DESTINATION share/${PROJECT_NAME})
 
 ament_package()
