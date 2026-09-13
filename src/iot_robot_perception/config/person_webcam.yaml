@@ -1,0 +1,19 @@
+/camera/usb_cam:
+  ros__parameters:
+    video_device: /dev/video0
+    image_width: 640
+    image_height: 480
+    framerate: 30.0
+    pixel_format: mjpeg2rgb
+    camera_name: webcam
+    frame_id: camera_optical_frame
+    brightness: -1
+
+person_detector:
+  ros__parameters:
+    input_size: 320
+    score_threshold: 0.4
+    keypoint_threshold: 0.5
+    person_height: 1.70
+    torso_ratio: 0.29
+    num_threads: 4

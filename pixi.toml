@@ -13,7 +13,7 @@ sim = { cmd = "ros2 launch iot_robot_mujoco sim.launch.py", depends-on = ["mjcf"
 teleop = "ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/cmd_vel/teleop"
 ball = "ros2 run iot_robot_perception ball_detector"
 follow = "ros2 launch iot_robot_behavior ball_follow.launch.py"
-
+person = "ros2 launch iot_robot_perception person_webcam.launch.py"
 
 [activation]
 scripts = ["scripts/activate.sh"]
@@ -48,6 +48,7 @@ ros-jazzy-twist-mux = ">=4.5.0,<5"
 onnxruntime = ">=1.29.1,<2"
 ros-jazzy-usb-cam = ">=0.8.1,<0.9"
 ros-jazzy-camera-calibration = ">=5.0.13,<6"
+semver = ">=3.0.4,<4"
 
 [pypi-dependencies]
 mujoco = "==3.10.*"

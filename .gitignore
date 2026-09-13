@@ -12,3 +12,6 @@ src/iot_robot_mujoco/mjcf/robot_description_formatted.urdf
 
 # Python
 __pycache__/
+
+# Exported ONNX models (AGPL weights, regenerate with uvx)
+models/
