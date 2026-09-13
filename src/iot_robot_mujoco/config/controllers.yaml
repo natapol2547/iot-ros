@@ -1,6 +1,7 @@
 controller_manager:
   ros__parameters:
     update_rate: 100
+    enforce_command_limits: true
 
 joint_state_broadcaster:
   ros__parameters:

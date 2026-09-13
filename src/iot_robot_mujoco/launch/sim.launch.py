@@ -10,6 +10,7 @@ def generate_launch_description():
     pkg = FindPackageShare("iot_robot_mujoco")
     urdf = PathJoinSubstitution([pkg, "urdf", "iot_robot_sim.urdf.xacro"])
     controllers = PathJoinSubstitution([pkg, "config", "controllers.yaml"])
+    twist_mux = PathJoinSubstitution([pkg, "config", "twist_mux.yaml"])
     headless = LaunchConfiguration("headless")
 
     robot_description = ParameterValue(
@@ -42,4 +43,10 @@ def generate_launch_description():
         spawner("joint_state_broadcaster"),
         spawner("diff_drive_controller"),
         spawner("gizmo_controller"),
+        Node(
+            package="twist_mux",
+            executable="twist_mux",
+            parameters=[twist_mux, {"use_sim_time": True}],
+            remappings=[("cmd_vel_out", "/diff_drive_controller/cmd_vel")],
+        ),
     ])

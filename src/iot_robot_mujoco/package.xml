@@ -11,6 +11,7 @@
 
     <exec_depend>iot_robot_description</exec_depend>
     <exec_depend>mujoco_ros2_control</exec_depend>
+    <exec_depend>twist_mux</exec_depend>
 
     <export>
         <build_type>ament_cmake</build_type>

@@ -7,6 +7,7 @@ import numpy as np
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, Image
@@ -26,7 +27,8 @@ class BallDetector(Node):
 
         self.bridge = CvBridge()
         self.camera_matrix = None  # (fx, fy, cx, cy), filled from CameraInfo
-        self.depth = None  # latest depth image, simulation ground truth only
+        # (stamp, u, v, z, radius), checked against sim depth
+        self.last_detection = None
 
         self.create_subscription(
             CameraInfo, "/camera/camera_info", self.on_camera_info, qos_profile_sensor_data)
@@ -44,7 +46,24 @@ class BallDetector(Node):
         self.camera_matrix = (msg.k[0], msg.k[4], msg.k[2], msg.k[5])
 
     def on_depth(self, msg):
-        self.depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding="32FC1")
+        """Compare the size-based estimate with the simulated depth image."""
+        # The depth frame arrives just after its colour frame. Only compare frames with
+        # the same stamp, otherwise robot motion between frames shows up as fake error
+        if self.last_detection is None or self.last_detection[0] != msg.header.stamp:
+            return
+        _, u, v, z_estimate, radius = self.last_detection
+        depth = self.bridge.imgmsg_to_cv2(msg, desired_encoding="32FC1")
+        depth_at_ball = float(depth[int(v), int(u)])
+        if not math.isfinite(depth_at_ball) or depth_at_ball <= 0.0:
+            return
+        # Depth hits the ball's front surface; its centre is one radius further away
+        z_true = depth_at_ball + self.ball_diameter / 2.0
+        error = z_estimate - z_true
+        self.get_logger().info(
+            f"radius {radius:5.1f} px | estimate {z_estimate:.3f} m | depth {z_true:.3f} m | "
+            f"error {100.0 * error:+.1f} cm ({100.0 * error / z_true:+.1f}%)",
+            throttle_duration_sec=1.0,
+        )
 
     def on_image(self, msg):
         if self.camera_matrix is None:
@@ -65,8 +84,13 @@ class BallDetector(Node):
             (u, v), radius = cv2.minEnclosingCircle(
                 max(contours, key=cv2.contourArea))
             if radius >= self.min_radius_px:
-                # Pinhole model: an object of size D at depth Z spans fx * D / Z pixels
-                z = fx * self.ball_diameter / (2.0 * radius)
+                # Pinhole model: an object of size D at depth Z spans fx * D / Z pixels.
+                # Away from the image centre a sphere projects to an ellipse stretched
+                # by 1 / cos(theta), and the enclosing circle follows the long axis
+                cos_theta = 1.0 / \
+                    math.sqrt(1.0 + ((u - cx) / fx) **
+                              2 + ((v - cy) / fy) ** 2)
+                z = fx * self.ball_diameter / (2.0 * radius * cos_theta)
 
                 point = PointStamped()
                 point.header = msg.header  # camera_optical_frame, same timestamp as the image
@@ -75,7 +99,7 @@ class BallDetector(Node):
                 point.point.z = z
                 self.position_pub.publish(point)
 
-                self.log_against_depth(u, v, z, radius)
+                self.last_detection = (msg.header.stamp, u, v, z, radius)
                 cv2.circle(bgr, (int(u), int(v)), int(radius), (0, 0, 255), 2)
                 cv2.putText(bgr, f"{z:.2f} m", (int(u - radius), int(v - radius - 8)),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
@@ -102,11 +126,15 @@ class BallDetector(Node):
 
 
 def main():
+    # One thread is faster here: for a 640x480 image, OpenMP's thread coordination
+    # costs more than the work itself and steals CPU from the simulator
+    cv2.setNumThreads(1)
+
     rclpy.init()
     node = BallDetector()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
