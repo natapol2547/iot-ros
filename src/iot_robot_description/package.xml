@@ -4,7 +4,7 @@
     <name>iot_robot_description</name>
     <version>0.1.0</version>
     <description>URDF, meshes and display launch for the iot_robot differential-drive platform.</description>
-    <maintainer email="contact@findmy3d.com">tawan</maintainer>
+    <maintainer email="6638050521@student.chula.ac.th">tawan</maintainer>
     <license>Apache-2.0</license>
 
     <buildtool_depend>ament_cmake</buildtool_depend>

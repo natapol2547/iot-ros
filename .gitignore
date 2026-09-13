@@ -9,3 +9,6 @@ src/iot_robot_mujoco/mjcf/assets/
 src/iot_robot_mujoco/mjcf/mujoco_description.xml
 src/iot_robot_mujoco/mjcf/mujoco_description_formatted.xml
 src/iot_robot_mujoco/mjcf/robot_description_formatted.urdf
+
+# Python
+__pycache__/
