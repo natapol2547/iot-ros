@@ -24,12 +24,22 @@
         <material name="eyes" rgba="0.05 0.05 0.05 1" />
         <material name="shirt2" rgba="0.2 0.55 0.3 1" />
         <material name="pants2" rgba="0.65 0.55 0.4 1" />
+        <!-- Obstacles stay unsaturated grey so the yellow-ball detector never picks them up -->
+        <material name="concrete" rgba="0.72 0.72 0.7 1" />
+        <material name="crate" rgba="0.3 0.3 0.33 1" />
 
     </asset>
 
     <worldbody>
         <light pos="0 0 3" dir="0 0 -1" directional="true" />
         <geom name="floor" type="plane" size="0 0 0.05" material="groundplane" />
+
+        <!-- Static obstacles for the ultrasonic sensors, one on each side. From the start pose
+         the left sensor sees the wall and the right one the crate, both about 1.2 m away. Both
+         lie more than 38° off the x axis, outside the camera's ±31° view, so they never hide the
+         ball or the mannequins -->
+        <geom name="wall" type="box" pos="0.6 1.0 0.25" size="0.6 0.04 0.25" material="concrete" />
+        <geom name="crate" type="box" pos="0.9 -1.15 0.2" size="0.2 0.2 0.2" material="crate" />
 
         <!-- 10 cm yellow ball, 1 m in front of the robot -->
         <body name="ball" pos="1.0 0 0.05">

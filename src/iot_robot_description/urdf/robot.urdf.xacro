@@ -190,4 +190,20 @@
         <child link="camera_optical_frame" />
     </joint>
 
+    <!-- HC-SR04 ultrasonic sensors on the two front chamfers, turned 45° outwards. The origin
+         sits just in front of the transducer faces (their centre is 30 mm above base_link) and
+         x points along the beam, so sensor_msgs/Range readings are measured from this frame -->
+    <link name="ultrasonic_left_link" />
+    <joint name="ultrasonic_left_joint" type="fixed">
+        <origin xyz="0.144 0.114 0.030" rpy="0 0 ${pi/4}" />
+        <parent link="base_link" />
+        <child link="ultrasonic_left_link" />
+    </joint>
+    <link name="ultrasonic_right_link" />
+    <joint name="ultrasonic_right_joint" type="fixed">
+        <origin xyz="0.144 -0.114 0.030" rpy="0 0 ${-pi/4}" />
+        <parent link="base_link" />
+        <child link="ultrasonic_right_link" />
+    </joint>
+
 </robot>

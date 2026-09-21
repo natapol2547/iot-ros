@@ -50,4 +50,11 @@ def generate_launch_description():
             parameters=[twist_mux, {"use_sim_time": True}],
             remappings=[("cmd_vel_out", "/diff_drive_controller/cmd_vel")],
         ),
+        # The simulated ultrasonic rays arrive as LaserScans; publish them as the
+        # /ultrasonic/left and /ultrasonic/right ranges the STM32 bridge provides
+        Node(
+            package="iot_robot_mujoco",
+            executable="scan_to_range.py",
+            parameters=[{"use_sim_time": True}],
+        ),
     ])

@@ -12,6 +12,9 @@
     <exec_depend>iot_robot_description</exec_depend>
     <exec_depend>mujoco_ros2_control</exec_depend>
     <exec_depend>twist_mux</exec_depend>
+    <!-- scan_to_range.py -->
+    <exec_depend>rclpy</exec_depend>
+    <exec_depend>sensor_msgs</exec_depend>
     <!-- twist_mux.yaml is shared with the real robot and lives there -->
     <exec_depend>iot_robot_behavior</exec_depend>
 

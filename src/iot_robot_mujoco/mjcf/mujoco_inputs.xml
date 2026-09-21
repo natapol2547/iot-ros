@@ -26,6 +26,14 @@
             <position name="gizmo_pitch_joint" joint="gizmo_pitch_joint" kp="5" dampratio="1"
                 ctrlrange="-0.785398 0" />
         </actuator>
+
+        <!-- One rangefinder per ultrasonic ray. The <lidar> tags below replicate the sites into
+         ultrasonic_left-0 ... -4, and MuJoCo replicates a sensor that references a replicated
+         site, so these become ten rangefinders with the same names -->
+        <sensor>
+            <rangefinder name="ultrasonic_left" site="ultrasonic_left" />
+            <rangefinder name="ultrasonic_right" site="ultrasonic_right" />
+        </sensor>
     </raw_inputs>
 
     <!-- Tags the converter transforms before inserting -->
@@ -37,5 +45,14 @@
         <!-- Raspberry Pi Camera v2.1 (IMX219): 48.8° vertical FOV -->
         <camera site="camera_optical_frame" name="camera" fovy="48.8" mode="fixed"
             resolution="640 480" />
+
+        <!-- HC-SR04 beam: five horizontal rays across its ~15° cone (±0.13 rad around the
+         sensor's x axis). The sim turns the resulting LaserScan into sensor_msgs/Range by taking
+         the nearest ray. max_angle is a hair over 0.13 so the converter's
+         int((max - min) / increment) + 1 is 5 despite floating point rounding -->
+        <lidar ref_site="ultrasonic_left_link" sensor_name="ultrasonic_left" min_angle="-0.13"
+            max_angle="0.1301" angle_increment="0.065" />
+        <lidar ref_site="ultrasonic_right_link" sensor_name="ultrasonic_right" min_angle="-0.13"
+            max_angle="0.1301" angle_increment="0.065" />
     </processed_inputs>
 </mujoco_inputs>

@@ -13,6 +13,8 @@
             <param name="mujoco_model">$(find iot_robot_mujoco)/mjcf/scene.xml</param>
             <param name="headless">$(arg headless)</param>
             <param name="camera_publish_rate">15.0</param>
+            <!-- The STM32 reports both ultrasonic sensors at about 15 Hz -->
+            <param name="lidar_publish_rate">15.0</param>
         </hardware>
 
         <joint name="wheel_joint_left">
@@ -43,6 +45,29 @@
             <param name="image_topic">/camera/image_raw</param>
             <param name="info_topic">/camera/camera_info</param>
             <param name="depth_topic">/camera/depth</param>
+        </sensor>
+
+        <!-- Ultrasonic sensors. Each name matches the ultrasonic_*-N rangefinders created by the
+         <lidar> tags in mujoco_inputs.xml, and the angles must match those tags. The plugin
+         publishes a 5-ray LaserScan; scan_to_range turns it into the sensor_msgs/Range that
+         the STM32 bridge publishes on the real robot -->
+        <sensor name="ultrasonic_left">
+            <param name="frame_name">ultrasonic_left_link</param>
+            <param name="min_angle">-0.13</param>
+            <param name="max_angle">0.13</param>
+            <param name="angle_increment">0.065</param>
+            <param name="range_min">0.02</param>
+            <param name="range_max">4.0</param>
+            <param name="laserscan_topic">/sim/ultrasonic/left/scan</param>
+        </sensor>
+        <sensor name="ultrasonic_right">
+            <param name="frame_name">ultrasonic_right_link</param>
+            <param name="min_angle">-0.13</param>
+            <param name="max_angle">0.13</param>
+            <param name="angle_increment">0.065</param>
+            <param name="range_min">0.02</param>
+            <param name="range_max">4.0</param>
+            <param name="laserscan_topic">/sim/ultrasonic/right/scan</param>
         </sensor>
     </ros2_control>
 
