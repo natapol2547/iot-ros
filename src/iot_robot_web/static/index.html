@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0f1113">
+  <title>IoT Robot Console</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app" id="app" data-mode="drive" data-conn="connecting">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">IoT Robot</span>
+        <span class="brand-sub">Remote console</span>
+      </div>
+      <div class="status">
+        <span class="pill conn" id="conn" role="status">
+          <i class="dot" aria-hidden="true"></i><span id="conn-text">Connecting</span>
+        </span>
+        <span class="pill base" id="base" title="Wheel odometry from the robot">
+          <i class="dot" aria-hidden="true"></i>Base
+        </span>
+        <span class="pill" id="viewers" title="Browsers connected to the robot">
+          <span class="num" id="viewers-n">0</span>&nbsp;online
+        </span>
+        <span class="pill battery" id="battery" title="Battery voltage reported by the STM32">
+          <span class="battery-icon" aria-hidden="true"><i id="battery-fill"></i></span>
+          <span class="num" id="battery-text">--</span>
+        </span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage">
+        <div class="video panel" id="video-box">
+          <div class="video-bar">
+            <span class="tag" id="mode-tag">Drive</span>
+            <span class="tag driver" id="driver-tag" data-driver="none">Controls free</span>
+          </div>
+          <div class="video-frame">
+            <img id="video" alt="Live view from the robot camera">
+            <div class="video-empty" id="video-empty">
+              <span class="video-empty-title" id="video-empty-title">Waiting for video</span>
+              <span class="video-empty-sub" id="video-empty-sub">The camera stream starts in a moment</span>
+            </div>
+            <div class="hud hud-bottom">
+              <span class="readout"><span class="readout-label">Speed</span><b class="num" id="speed">0.00</b><span class="unit">m/s</span></span>
+              <span class="readout"><span class="readout-label">Turn</span><b class="num" id="turn">0.00</b><span class="unit">rad/s</span></span>
+            </div>
+            <div class="guard" id="guard" role="alert" hidden></div>
+          </div>
+          <div class="estop-veil" aria-hidden="true"><span>E-stop engaged</span></div>
+        </div>
+
+        <div class="sonar panel" id="sonar" aria-label="Ultrasonic distance sensors">
+          <div class="sonar-side" id="us-left" data-level="none">
+            <div class="lamps" aria-hidden="true">
+              <i class="lamp red"></i><i class="lamp yellow"></i><i class="lamp green"></i>
+            </div>
+            <div class="sonar-read">
+              <span class="sonar-name">Left<span class="wide-only"> sensor</span></span>
+              <span class="sonar-value"><b class="num">--</b><span class="unit">cm</span></span>
+              <span class="sonar-state">No data</span>
+              <span class="gauge" aria-hidden="true"><i class="gauge-mark"></i></span>
+            </div>
+          </div>
+
+          <svg class="sonar-map" id="sonar-map" viewBox="0 0 160 120" aria-hidden="true">
+            <path class="cone-bg" id="cone-left-bg" />
+            <path class="cone-bg" id="cone-right-bg" />
+            <path class="cone-fill" id="cone-left-fill" />
+            <path class="cone-fill" id="cone-right-fill" />
+            <path class="cone-stop" id="cone-left-stop" />
+            <path class="cone-stop" id="cone-right-stop" />
+            <path class="cone-echo" id="cone-left-echo" />
+            <path class="cone-echo" id="cone-right-echo" />
+            <rect class="wheel" x="54" y="90" width="7" height="20" rx="2" />
+            <rect class="wheel" x="99" y="90" width="7" height="20" rx="2" />
+            <path class="body" d="M62 84 L72 74 L88 74 L98 84 L98 114 L62 114 Z" />
+            <circle class="cam" cx="80" cy="86" r="4" />
+          </svg>
+
+          <div class="sonar-side mirror" id="us-right" data-level="none">
+            <div class="lamps" aria-hidden="true">
+              <i class="lamp red"></i><i class="lamp yellow"></i><i class="lamp green"></i>
+            </div>
+            <div class="sonar-read">
+              <span class="sonar-name">Right<span class="wide-only"> sensor</span></span>
+              <span class="sonar-value"><b class="num">--</b><span class="unit">cm</span></span>
+              <span class="sonar-state">No data</span>
+              <span class="gauge" aria-hidden="true"><i class="gauge-mark"></i></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="deck">
+        <button class="estop" id="estop" type="button" aria-pressed="false">
+          <span class="estop-fill" aria-hidden="true"></span>
+          <span class="estop-title" id="estop-title">Stop</span>
+          <span class="estop-sub" id="estop-sub">Tap to stop the robot</span>
+        </button>
+
+        <section class="panel modes" aria-labelledby="modes-title">
+          <h2 class="panel-title" id="modes-title">Mode</h2>
+          <div class="segmented" role="radiogroup" aria-labelledby="modes-title">
+            <button type="button" role="radio" data-mode="drive" aria-checked="true">Drive</button>
+            <button type="button" role="radio" data-mode="ball" aria-checked="false">Follow ball</button>
+            <button type="button" role="radio" data-mode="person" aria-checked="false">Follow person</button>
+          </div>
+          <p class="mode-status" id="mode-status" data-status="ready">
+            <i class="dot" aria-hidden="true"></i><span id="mode-status-text">Manual control</span>
+          </p>
+        </section>
+
+        <section class="panel drive" aria-labelledby="drive-title">
+          <div class="panel-head">
+            <h2 class="panel-title" id="drive-title">Drive</h2>
+            <span class="panel-note" id="drive-note">Hold and drag</span>
+          </div>
+          <div class="drive-body">
+            <div class="joystick" id="joystick" data-state="idle">
+              <div class="joy-forward" aria-hidden="true"></div>
+              <div class="joy-cross" aria-hidden="true"></div>
+              <div class="joy-knob" id="joy-knob" aria-hidden="true"></div>
+              <div class="joy-lock" id="joy-lock"></div>
+            </div>
+            <div class="drive-side">
+              <label class="speed" for="speed-range">
+                <span class="speed-head"><span>Speed</span><b class="num" id="speed-pct">50%</b></span>
+                <input type="range" id="speed-range" min="10" max="100" step="5" value="50">
+                <span class="speed-max num" id="speed-max">up to 0.20 m/s</span>
+              </label>
+              <p class="keys" id="keys">
+                <span class="keys-title">Keyboard</span>
+                <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span class="nowrap">or arrows</span></span>
+                <span><kbd>Space</kbd> stop</span>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel gizmo" data-show="drive" aria-labelledby="gizmo-title">
+          <div class="panel-head">
+            <h2 class="panel-title" id="gizmo-title">Camera aim</h2>
+            <span class="panel-note num" id="gizmo-readout">Pan 0°, tilt 0°</span>
+          </div>
+          <div class="gizmo-body">
+            <div class="gizmo-pad" id="gizmo-pad" aria-label="Drag to aim the camera">
+              <div class="gizmo-grid" aria-hidden="true"></div>
+              <div class="gizmo-dot" id="gizmo-dot" aria-hidden="true"></div>
+              <span class="gizmo-hint gizmo-hint-up" aria-hidden="true">Up</span>
+              <span class="gizmo-hint gizmo-hint-level" aria-hidden="true">Level</span>
+            </div>
+            <button type="button" class="btn" id="gizmo-center">Centre</button>
+          </div>
+        </section>
+
+        <section class="panel info" data-show="ball">
+          <h2 class="panel-title">Follow ball</h2>
+          <p class="info-text">The robot looks for the yellow ball and drives up to it. The video shows what the detector sees. Use the joystick at any time to take over.</p>
+        </section>
+
+        <section class="panel person" data-show="person" aria-labelledby="person-title">
+          <div class="panel-head">
+            <h2 class="panel-title" id="person-title">Follow person</h2>
+          </div>
+          <p class="hint"><b>Raise both hands for 2 s to enroll.</b> The robot then follows only you.</p>
+          <p class="detector" id="person-status">Detector starting</p>
+          <div class="person-actions">
+            <button type="button" class="btn primary" id="enroll">Enroll person in view</button>
+            <button type="button" class="btn" id="forget">Forget</button>
+          </div>
+          <p class="result" id="person-result" aria-live="polite"></p>
+        </section>
+      </aside>
+    </main>
+
+    <div class="offline" id="offline" role="alert">
+      <b>Connection lost</b><span id="offline-text">Reconnecting</span>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

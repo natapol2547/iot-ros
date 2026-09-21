@@ -14,6 +14,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
+from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformException, TransformListener
 
@@ -116,6 +117,8 @@ class PersonDetector(Node):
             PointStamped, "/person/position", 10)
         self.debug_pub = self.create_publisher(
             Image, "/person/debug_image", 10)
+        # The status line of the debug image as text, for the web controller
+        self.status_pub = self.create_publisher(String, "/person/status", 10)
         # "~/" puts the services under the node name: /person_detector/enroll
         self.create_service(Trigger, "~/enroll", self.on_enroll)
         self.create_service(Trigger, "~/forget", self.on_forget)
@@ -278,12 +281,22 @@ class PersonDetector(Node):
                     x), float(y), float(z)
                 self.position_pub.publish(point)
 
+        self.status_pub.publish(String(data=self.status(target, stamp)))
+
         if self.debug_pub.get_subscription_count() > 0:
             self.draw_debug(frame, boxes, scores, people,
                             similarities, target, distance, stamp)
             debug_msg = self.bridge.cv2_to_imgmsg(frame, encoding="bgr8")
             debug_msg.header = msg.header
             self.debug_pub.publish(debug_msg)
+
+    def status(self, target, stamp):
+        """One line describing what the detector is doing, for people watching the robot."""
+        if self.enroll_start is not None:
+            return f"Enrolling {stamp - self.enroll_start:.1f} / {self.enroll_duration:.1f} s"
+        if not self.gallery:
+            return "Raise both hands to enroll"
+        return "Following" if target is not None else "Enrolled person not in view"
 
     def draw_debug(self, frame, boxes, scores, people, similarities, target, distance, stamp):
         for box, score in zip(boxes.astype(int), scores):
@@ -297,13 +310,7 @@ class PersonDetector(Node):
             cv2.putText(frame, f"sim {similarity:.2f}", (x1 + 4, y1 + 20),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
 
-        if self.enroll_start is not None:
-            status = f"Enrolling {stamp - self.enroll_start:.1f} / {self.enroll_duration:.1f} s"
-        elif not self.gallery:
-            status = "Raise both hands to enroll"
-        else:
-            status = "Following" if target is not None else "Enrolled person not in view"
-        cv2.putText(frame, status, (10, 25),
+        cv2.putText(frame, self.status(target, stamp), (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
 
         if target is None:

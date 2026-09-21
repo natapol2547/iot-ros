@@ -1,0 +1,53 @@
+# Browser controller (iot_robot_web). Floats keep their decimal point: ROS parameters
+# are typed, and 20 in place of 20.0 would be rejected.
+web_controller:
+  ros__parameters:
+    # Web server. 0.0.0.0 listens on every interface, so anyone on the LAN can open it
+    host: 0.0.0.0
+    port: 8080
+    # Extra host names the page may be opened under. IP addresses, localhost and this
+    # machine's hostname (plain and .local) always work; any other name is refused to
+    # block DNS rebinding. ["*"] accepts every name
+    # allowed_hosts: ["robot.lan"]
+    telemetry_rate: 10.0         # Hz, state pushed to every browser
+    stream_fps: 10.0             # MJPEG frame rate cap
+    stream_width: 640            # frames wider than this are scaled down before encoding
+    jpeg_quality: 70
+
+    # Driving. Every browser command is scaled into these limits
+    max_linear: 0.4              # m/s
+    max_angular: 1.5             # rad/s
+    publish_rate: 20.0           # Hz on /cmd_vel/web while someone drives
+    command_timeout: 0.3         # s without a browser command before the robot stops
+    driver_timeout: 2.0          # s a driver keeps the controls after letting go
+    # start_estopped (engage the E-stop at every start) is set by web.launch.py's
+    # start_estopped argument: false by default, true when robot.launch.py starts the page
+
+    # Ultrasonic sensors (/ultrasonic/left, /ultrasonic/right)
+    obstacle_stop_distance: 0.25 # m, forward motion is blocked below this. 0.0 disables
+    warn_distance: 1.0           # m, the light turns yellow below this
+    danger_distance: 0.4         # m, the light turns red below this
+    sensor_timeout: 1.0          # s before a reading counts as stale ("no data")
+    # Block forward motion while a sensor is faulty or stale. false only for bench tests
+    # without the STM32; the page then drives forward on whichever side still reports
+    require_ultrasonic: true
+
+    # Camera gizmo, the joint limits of the URDF (rad). Negative pitch looks up
+    yaw_limit: 0.785398
+    pitch_min: -0.785398
+    pitch_max: 0.0
+
+    # 6S LiPo: 3.5 V per cell reads as 0 %, 4.2 V as 100 %
+    battery_empty_voltage: 21.0
+    battery_full_voltage: 25.2
+
+    # Follow modes run `ros2 launch <launch_package> <file> use_sim_time:=...`
+    launch_package: iot_robot_behavior
+    ball_launch: ball_follow.launch.py
+    person_launch: person_follow.launch.py
+    stop_timeout: 10.0           # s to wait after SIGINT before killing a follow launch
+
+    # Video source for each mode
+    camera_topic: /camera/image_raw
+    ball_image_topic: /ball/debug_image
+    person_image_topic: /person/debug_image
