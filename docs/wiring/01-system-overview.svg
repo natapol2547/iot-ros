@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- iot_robot system overview. Hand-written SVG; edit this file directly. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1065" viewBox="0 0 1600 1065">
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #1a1a1a; }
+    .title { font-size: 26px; font-weight: bold; }
+    .subtitle { font-size: 15px; fill: #444; }
+    .h { font-size: 17px; font-weight: bold; }
+    .t { font-size: 14px; }
+    .s { font-size: 13px; fill: #333; }
+    .box { stroke: #333; stroke-width: 1.6; }
+    .pwr { fill: #fff3e0; }
+    .act { fill: #e3f2fd; }
+    .cpu { fill: #e8f5e9; }
+    .sen { fill: #f3e5f5; }
+    .opt { fill: #ffffff; stroke-dasharray: 7 5; }
+    .stop { fill: #ffebee; stroke: #b71c1c; stroke-width: 2.4; }
+    .w24 { stroke: #c62828; stroke-width: 6; fill: none; stroke-linejoin: round; }
+    .w5 { stroke: #ef6c00; stroke-width: 5; fill: none; }
+    .usb { stroke: #1565c0; stroke-width: 3; fill: none; stroke-linejoin: round; }
+    .can { stroke: #6a1b9a; stroke-width: 3.5; fill: none; }
+    .sig { stroke: #2e7d32; stroke-width: 2.5; fill: none; stroke-linejoin: round; }
+    .csi { stroke: #455a64; stroke-width: 7; fill: none; }
+    .sense { stroke: #6d4c41; stroke-width: 2.5; fill: none; }
+    .dash { stroke-dasharray: 8 6; }
+    .thin { stroke-width: 3.5; }
+    .dot { fill: #c62828; }
+    .flag { fill: #fafafa; stroke: #777; stroke-width: 1.2; }
+  </style>
+  <rect x="0" y="0" width="1600" height="1065" fill="#ffffff"/>
+
+  <text x="30" y="42" class="title">iot_robot: system overview</text>
+  <text x="30" y="70" class="subtitle">Power and data paths. Thick lines carry power, thin lines carry data, dashed parts are optional. Not to scale; see the other diagrams for pins.</text>
+
+  <!-- ===== Power wiring (drawn first so boxes sit on top) ===== -->
+  <path class="w24" d="M220 190 H260"/>
+  <path class="w24" d="M370 190 H410"/>
+  <path class="w24" d="M530 190 H630"/>
+  <path class="w24" d="M780 190 H1040"/>
+  <path class="w24" d="M830 190 V110 H1455 V140"/>
+  <path class="w24" d="M580 190 V280"/>
+  <path class="w24" d="M580 330 V380"/>
+  <path class="w5" d="M580 470 V540"/>
+  <circle class="dot" cx="580" cy="190" r="7"/>
+  <circle class="dot" cx="830" cy="190" r="7"/>
+  <text x="590" y="178" class="s">J1</text>
+  <text x="840" y="178" class="s">J2</text>
+  <text x="870" y="180" class="s">motor bus 24 V (16 AWG)</text>
+  <text x="598" y="512" class="s">5.1 V via USB-C</text>
+
+  <!-- battery-sense tap (optional) from the switched node -->
+  <circle class="dot" cx="580" cy="250" r="5"/>
+  <path class="sense dash" d="M580 250 H560"/>
+  <rect class="flag" x="398" y="236" width="162" height="28" rx="4"/>
+  <text x="479" y="255" class="s" text-anchor="middle">to battery sense (opt.)</text>
+
+  <!-- servo BEC feed (optional) from the motor bus -->
+  <path class="w24 dash thin" d="M830 190 V262"/>
+  <rect class="flag" x="755" y="262" width="150" height="28" rx="4"/>
+  <text x="830" y="281" class="s" text-anchor="middle">to servo BEC (opt.)</text>
+
+  <!-- ===== Data wiring ===== -->
+  <path class="usb" d="M770 580 H1000 V360 H1055"/>
+  <text x="790" y="572" class="s">USB</text>
+  <path class="usb" d="M770 640 H1080"/>
+  <text x="790" y="632" class="s">USB (ST-LINK virtual COM port)</text>
+  <path class="can" d="M1155 320 V240"/>
+  <text x="1165" y="290" class="s">CAN 1 Mbit/s</text>
+  <path class="can" d="M1270 190 H1340"/>
+  <text x="1283" y="180" class="s">CAN</text>
+  <path class="sig" d="M1290 585 H1370"/>
+  <path class="sig" d="M1290 675 H1370"/>
+  <path class="csi" d="M530 710 V805"/>
+  <text x="545" y="752" class="s">CSI ribbon</text>
+  <text x="545" y="768" class="s">(Pi 5: 22-to-15-pin)</text>
+  <path class="sig dash" d="M1130 700 V850 H900"/>
+  <text x="935" y="842" class="s">PWM PA6 / PA7 (opt.)</text>
+  <path class="sense dash" d="M1250 700 V780"/>
+  <path class="w5 dash thin" d="M1150 950 H795 V895"/>
+  <text x="935" y="942" class="s">5-6 V servo power (opt.)</text>
+  <path class="w24 dash thin" d="M1340 950 H1370"/>
+
+  <!-- ===== Power chain boxes ===== -->
+  <rect class="box pwr" x="30" y="145" width="190" height="90" rx="8"/>
+  <text x="125" y="176" class="h" text-anchor="middle">6S LiPo</text>
+  <text x="125" y="198" class="t" text-anchor="middle">22.2 V nominal</text>
+  <text x="125" y="218" class="t" text-anchor="middle">25.2 V full</text>
+
+  <rect class="box pwr" x="260" y="160" width="110" height="60" rx="8"/>
+  <text x="315" y="185" class="h" text-anchor="middle">F1 fuse</text>
+  <text x="315" y="207" class="t" text-anchor="middle">15 A</text>
+
+  <rect class="box pwr" x="410" y="160" width="120" height="60" rx="8"/>
+  <text x="470" y="185" class="h" text-anchor="middle">SW1</text>
+  <text x="470" y="207" class="t" text-anchor="middle">main switch</text>
+
+  <rect class="box stop" x="630" y="150" width="150" height="80" rx="8"/>
+  <text x="705" y="178" class="h" text-anchor="middle" fill="#b71c1c">E-STOP</text>
+  <text x="705" y="198" class="t" text-anchor="middle">cuts motors only</text>
+  <text x="705" y="217" class="t" text-anchor="middle">(Pi stays on)</text>
+
+  <rect class="box pwr" x="530" y="280" width="100" height="50" rx="8"/>
+  <text x="580" y="302" class="h" text-anchor="middle">F2 fuse</text>
+  <text x="580" y="321" class="t" text-anchor="middle">3 A</text>
+
+  <rect class="box pwr" x="480" y="380" width="200" height="90" rx="8"/>
+  <text x="580" y="408" class="h" text-anchor="middle">Buck converter</text>
+  <text x="580" y="430" class="t" text-anchor="middle">24 V to 5.1 V</text>
+  <text x="580" y="450" class="t" text-anchor="middle">5 A for Pi 5 (rating TBD)</text>
+
+  <!-- ===== Motors and CAN ===== -->
+  <rect class="box act" x="1040" y="140" width="230" height="100" rx="8"/>
+  <text x="1155" y="170" class="h" text-anchor="middle">AK45-10 LEFT</text>
+  <text x="1155" y="193" class="t" text-anchor="middle">CAN ID 1</text>
+  <text x="1155" y="214" class="t" text-anchor="middle">24 V, 5 A peak</text>
+
+  <rect class="box act" x="1340" y="140" width="230" height="100" rx="8"/>
+  <text x="1455" y="170" class="h" text-anchor="middle">AK45-10 RIGHT</text>
+  <text x="1455" y="193" class="t" text-anchor="middle">CAN ID 2</text>
+  <text x="1455" y="214" class="t" text-anchor="middle">120 Ω end terminator</text>
+
+  <rect class="box cpu" x="1055" y="320" width="200" height="80" rx="8"/>
+  <text x="1155" y="346" class="h" text-anchor="middle">usb2can</text>
+  <text x="1155" y="367" class="t" text-anchor="middle">USB-CAN, model TBD</text>
+  <text x="1155" y="387" class="t" text-anchor="middle">120 Ω termination on</text>
+
+  <!-- ===== Computer ===== -->
+  <rect class="box cpu" x="430" y="540" width="340" height="170" rx="10"/>
+  <text x="600" y="580" class="h" text-anchor="middle">Raspberry Pi 5</text>
+  <text x="600" y="605" class="t" text-anchor="middle">model TBD (Pi 4 also covered)</text>
+  <text x="600" y="628" class="t" text-anchor="middle">ROS 2 Jazzy</text>
+  <text x="600" y="651" class="t" text-anchor="middle">CAN: can0 via usb2can</text>
+  <text x="600" y="674" class="t" text-anchor="middle">STM32: /dev/stm32 (ttyACM)</text>
+
+  <!-- ===== Nucleo and sensors ===== -->
+  <rect class="box cpu" x="1080" y="540" width="210" height="160" rx="8"/>
+  <text x="1185" y="572" class="h" text-anchor="middle">Nucleo-F401RE</text>
+  <text x="1185" y="596" class="t" text-anchor="middle">STM32F401RE</text>
+  <text x="1185" y="618" class="t" text-anchor="middle">USB VCP, 115200 8N1</text>
+  <text x="1185" y="640" class="t" text-anchor="middle">D1/D2 lines at ~15 Hz</text>
+  <text x="1185" y="662" class="t" text-anchor="middle">5 V to sensors</text>
+
+  <rect class="box sen" x="1370" y="550" width="200" height="70" rx="8"/>
+  <text x="1470" y="574" class="h" text-anchor="middle">HC-SR04 LEFT</text>
+  <text x="1470" y="594" class="t" text-anchor="middle">yaw +45°, TRIG PA0</text>
+  <text x="1470" y="612" class="t" text-anchor="middle">ECHO PA1 via divider</text>
+
+  <rect class="box sen" x="1370" y="640" width="200" height="70" rx="8"/>
+  <text x="1470" y="664" class="h" text-anchor="middle">HC-SR04 RIGHT</text>
+  <text x="1470" y="684" class="t" text-anchor="middle">yaw -45°, TRIG PA8</text>
+  <text x="1470" y="702" class="t" text-anchor="middle">ECHO PA9 via divider</text>
+
+  <rect class="flag" x="1150" y="780" width="200" height="42" rx="4"/>
+  <text x="1250" y="797" class="s" text-anchor="middle">battery sense PA4 (opt.)</text>
+  <text x="1250" y="814" class="s" text-anchor="middle">from J1 via 100k / 10k</text>
+
+  <!-- ===== Gizmo ===== -->
+  <rect x="410" y="785" width="500" height="140" rx="12" fill="none" stroke="#888" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="415" y="776" class="s">Pan/tilt gizmo</text>
+  <rect class="box sen" x="430" y="805" width="200" height="90" rx="8"/>
+  <text x="530" y="835" class="h" text-anchor="middle">Camera v2.1</text>
+  <text x="530" y="857" class="t" text-anchor="middle">Sony IMX219</text>
+  <text x="530" y="877" class="t" text-anchor="middle">on the gizmo</text>
+
+  <rect class="box opt" x="690" y="805" width="210" height="90" rx="8"/>
+  <text x="795" y="835" class="h" text-anchor="middle">Gizmo servos</text>
+  <text x="795" y="857" class="t" text-anchor="middle">yaw PA6, pitch PA7</text>
+  <text x="795" y="877" class="t" text-anchor="middle">optional, actuator TBD</text>
+
+  <rect class="box opt" x="1150" y="915" width="190" height="70" rx="8"/>
+  <text x="1245" y="942" class="h" text-anchor="middle">Servo BEC</text>
+  <text x="1245" y="964" class="t" text-anchor="middle">5-6 V, 3 A, optional</text>
+  <rect class="flag" x="1370" y="936" width="200" height="28" rx="4"/>
+  <text x="1470" y="955" class="s" text-anchor="middle">from J2 via fuse F3 (opt.)</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="30" y="785" width="350" height="262" rx="8" fill="#fafafa" stroke="#999" stroke-width="1.2"/>
+  <text x="45" y="810" class="h">Legend</text>
+  <path class="w24" d="M45 833 H105"/>
+  <text x="118" y="838" class="t">24 V battery power</text>
+  <path class="w5" d="M45 857 H105"/>
+  <text x="118" y="862" class="t">5 V supply</text>
+  <path class="usb" d="M45 881 H105"/>
+  <text x="118" y="886" class="t">USB</text>
+  <path class="can" d="M45 905 H105"/>
+  <text x="118" y="910" class="t">CAN (twisted pair)</text>
+  <path class="sig" d="M45 929 H105"/>
+  <text x="118" y="934" class="t">sensor / servo signals</text>
+  <path class="sense" d="M45 953 H105"/>
+  <text x="118" y="958" class="t">battery voltage sense</text>
+  <path class="csi" d="M45 977 H105"/>
+  <text x="118" y="982" class="t">CSI camera ribbon</text>
+  <path class="sig dash" d="M45 1001 H105" style="stroke:#555"/>
+  <text x="118" y="1006" class="t">dashed: optional part</text>
+  <text x="45" y="1027" class="s">All grounds are common (battery negative). Grounds</text>
+  <text x="45" y="1041" class="s">are drawn in the power and Nucleo diagrams.</text>
+</svg>

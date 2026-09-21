@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- iot_robot CAN bus. Hand-written SVG; edit this file directly.
+     Wire-by-wire harness source: docs/wiring/src/03-can-bus-harness.yml (WireViz). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1010" viewBox="0 0 1600 1010">
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #1a1a1a; }
+    .title { font-size: 26px; font-weight: bold; }
+    .subtitle { font-size: 15px; fill: #444; }
+    .h { font-size: 17px; font-weight: bold; }
+    .ph { font-size: 17px; font-weight: bold; fill: #0d47a1; }
+    .id { font-size: 20px; font-weight: bold; fill: #6a1b9a; }
+    .t { font-size: 14px; }
+    .s { font-size: 13px; fill: #333; }
+    .b { font-weight: bold; }
+    .box { stroke: #333; stroke-width: 1.6; }
+    .act { fill: #e3f2fd; }
+    .cpu { fill: #e8f5e9; }
+    .ifc { fill: #f3e5f5; }
+    .panel { fill: #fafafa; stroke: #999; stroke-width: 1.2; }
+    .flag { fill: #fafafa; stroke: #777; stroke-width: 1.2; }
+    .hcase { stroke: #424242; stroke-width: 6.5; fill: none; stroke-linejoin: round; }
+    .hcore { stroke: #ffffff; stroke-width: 3; fill: none; stroke-linejoin: round; }
+    .lo { stroke: #1e88e5; stroke-width: 4.5; fill: none; stroke-linejoin: round; }
+    .gnd { stroke: #212121; stroke-width: 4; fill: none; stroke-linejoin: round; }
+    .usb { stroke: #1565c0; stroke-width: 3; fill: none; }
+    .pos { stroke: #c62828; stroke-width: 5; fill: none; }
+    .neg { stroke: #212121; stroke-width: 5; fill: none; }
+    .res { fill: #ffffff; stroke: #333; stroke-width: 2; }
+    .lead { stroke: #333; stroke-width: 2; fill: none; }
+    .pin { fill: #ffffff; stroke: #333; stroke-width: 1.8; }
+  </style>
+  <rect x="0" y="0" width="1600" height="1010" fill="#ffffff"/>
+
+  <text x="30" y="42" class="title">iot_robot: CAN bus (1 Mbit/s)</text>
+  <text x="30" y="68" class="subtitle">Linear bus, 120 Ω at both ends. White (outlined) = CAN_H, blue = CAN_L, black = GND reference. Stranded twisted pair, 28 AWG (A1257 crimps take AWG 28-32 only).</text>
+
+  <!-- ================= Wires (drawn first, boxes on top) ================= -->
+  <!-- adapter -> LEFT motor pins 1 (CAN_L) and 2 (CAN_H) -->
+  <path class="lo" d="M340 410 V460 H650 V410"/>
+  <path class="hcase" d="M280 410 V490 H690 V410"/>
+  <path class="hcore" d="M280 410 V490 H690 V410"/>
+  <!-- LEFT pins 3 (CAN_H) and 4 (CAN_L) -> RIGHT pins 1 (CAN_L) and 2 (CAN_H) -->
+  <path class="lo" d="M770 410 V520 H1130 V410"/>
+  <path class="hcase" d="M730 410 V550 H1170 V410"/>
+  <path class="hcore" d="M730 410 V550 H1170 V410"/>
+  <!-- RIGHT pins 3 (CAN_H) and 4 (CAN_L) -> terminator -->
+  <path class="lo" d="M1250 410 V460 H1440 V485"/>
+  <path class="hcase" d="M1210 410 V600 H1440 V575"/>
+  <path class="hcore" d="M1210 410 V600 H1440 V575"/>
+  <!-- adapter GND -> 0 V star point -->
+  <path class="gnd" d="M220 410 V600"/>
+  <!-- USB -->
+  <path class="usb" d="M230 155 V230"/>
+  <!-- motor power stubs -->
+  <path class="pos" d="M702 210 V230"/>
+  <path class="neg" d="M718 210 V230"/>
+  <path class="pos" d="M1182 210 V230"/>
+  <path class="neg" d="M1198 210 V230"/>
+
+  <!-- ================= Raspberry Pi ================= -->
+  <rect class="box cpu" x="80" y="95" width="300" height="60" rx="8"/>
+  <text x="230" y="122" class="h" text-anchor="middle">Raspberry Pi</text>
+  <text x="230" y="142" class="s" text-anchor="middle">any USB-A port</text>
+  <text x="242" y="198" class="s">USB</text>
+
+  <!-- ================= USB-CAN adapter ================= -->
+  <rect class="box ifc" x="80" y="230" width="300" height="180" rx="8"/>
+  <text x="230" y="258" class="h" text-anchor="middle">USB-CAN adapter</text>
+  <text x="230" y="280" class="t" text-anchor="middle">model TBD</text>
+  <text x="230" y="300" class="s" text-anchor="middle">gs_usb driver, appears as can0</text>
+  <text x="230" y="320" class="s b" text-anchor="middle">bus end A</text>
+  <path class="lead" d="M280 380 V358 H292"/>
+  <rect class="res" x="292" y="351" width="36" height="14"/>
+  <path class="lead" d="M328 358 H340 V380"/>
+  <text x="310" y="343" class="s b" text-anchor="middle">120 Ω ON</text>
+  <text x="220" y="396" class="s b" text-anchor="middle">GND</text>
+  <text x="280" y="396" class="s b" text-anchor="middle">CAN_H</text>
+  <text x="340" y="396" class="s b" text-anchor="middle">CAN_L</text>
+  <rect class="pin" x="214" y="404" width="12" height="12"/>
+  <rect class="pin" x="274" y="404" width="12" height="12"/>
+  <rect class="pin" x="334" y="404" width="12" height="12"/>
+  <text x="100" y="360" class="s">onboard</text>
+  <text x="100" y="376" class="s">jumper / DIP</text>
+
+  <text x="380" y="450" class="s">adapter to LEFT: twisted pair, 28 AWG</text>
+
+  <!-- ================= AK45-10 LEFT ================= -->
+  <rect class="flag" x="600" y="170" width="220" height="40" rx="4"/>
+  <text x="710" y="186" class="s" text-anchor="middle">XT30 power from the motor bus</text>
+  <text x="710" y="202" class="s" text-anchor="middle">(see power diagram)</text>
+  <rect class="box act" x="560" y="230" width="300" height="180" rx="8"/>
+  <text x="710" y="258" class="h" text-anchor="middle">AK45-10 LEFT</text>
+  <text x="710" y="284" class="id" text-anchor="middle">CAN ID 1</text>
+  <text x="710" y="306" class="s" text-anchor="middle">CAN port A1257WR-S-4P (plug A1257H-4P)</text>
+  <text x="710" y="324" class="s" text-anchor="middle">pins 1+4 and 2+3 bridged inside</text>
+  <text x="710" y="342" class="s" text-anchor="middle">bus in 1/2, bus out 3/4</text>
+  <text x="650" y="380" class="s" text-anchor="middle">1</text>
+  <text x="690" y="380" class="s" text-anchor="middle">2</text>
+  <text x="730" y="380" class="s" text-anchor="middle">3</text>
+  <text x="770" y="380" class="s" text-anchor="middle">4</text>
+  <text x="650" y="400" class="s b" text-anchor="middle">L</text>
+  <text x="690" y="400" class="s b" text-anchor="middle">H</text>
+  <text x="730" y="400" class="s b" text-anchor="middle">H</text>
+  <text x="770" y="400" class="s b" text-anchor="middle">L</text>
+  <rect class="pin" x="644" y="404" width="12" height="12"/>
+  <rect class="pin" x="684" y="404" width="12" height="12"/>
+  <rect class="pin" x="724" y="404" width="12" height="12"/>
+  <rect class="pin" x="764" y="404" width="12" height="12"/>
+  <text x="636" y="440" class="s b" text-anchor="end">IN</text>
+  <text x="784" y="440" class="s b">OUT</text>
+
+  <text x="850" y="510" class="s">LEFT to RIGHT: twisted pair, 28 AWG</text>
+
+  <!-- ================= AK45-10 RIGHT ================= -->
+  <rect class="flag" x="1080" y="170" width="220" height="40" rx="4"/>
+  <text x="1190" y="186" class="s" text-anchor="middle">XT30 power from the motor bus</text>
+  <text x="1190" y="202" class="s" text-anchor="middle">(see power diagram)</text>
+  <rect class="box act" x="1040" y="230" width="300" height="180" rx="8"/>
+  <text x="1190" y="258" class="h" text-anchor="middle">AK45-10 RIGHT</text>
+  <text x="1190" y="284" class="id" text-anchor="middle">CAN ID 2</text>
+  <text x="1190" y="306" class="s" text-anchor="middle">CAN port A1257WR-S-4P (plug A1257H-4P)</text>
+  <text x="1190" y="324" class="s" text-anchor="middle">pins 1+4 and 2+3 bridged inside</text>
+  <text x="1190" y="342" class="s" text-anchor="middle">bus in 1/2, terminator on 3/4</text>
+  <text x="1130" y="380" class="s" text-anchor="middle">1</text>
+  <text x="1170" y="380" class="s" text-anchor="middle">2</text>
+  <text x="1210" y="380" class="s" text-anchor="middle">3</text>
+  <text x="1250" y="380" class="s" text-anchor="middle">4</text>
+  <text x="1130" y="400" class="s b" text-anchor="middle">L</text>
+  <text x="1170" y="400" class="s b" text-anchor="middle">H</text>
+  <text x="1210" y="400" class="s b" text-anchor="middle">H</text>
+  <text x="1250" y="400" class="s b" text-anchor="middle">L</text>
+  <rect class="pin" x="1124" y="404" width="12" height="12"/>
+  <rect class="pin" x="1164" y="404" width="12" height="12"/>
+  <rect class="pin" x="1204" y="404" width="12" height="12"/>
+  <rect class="pin" x="1244" y="404" width="12" height="12"/>
+  <text x="1116" y="440" class="s b" text-anchor="end">IN</text>
+  <text x="1264" y="440" class="s b">OUT</text>
+
+  <!-- ================= Terminator ================= -->
+  <rect class="res" x="1431" y="485" width="18" height="90"/>
+  <text x="1462" y="512" class="t b">R_T 120 Ω</text>
+  <text x="1462" y="532" class="s">1/4 W, bus end B,</text>
+  <text x="1462" y="550" class="s">soldered to 28 AWG</text>
+  <text x="1462" y="568" class="s">leads under 5 cm,</text>
+  <text x="1462" y="586" class="s">heat-shrink over it</text>
+
+  <!-- ================= GND flag ================= -->
+  <rect class="flag" x="90" y="600" width="300" height="58" rx="4"/>
+  <text x="240" y="620" class="s b" text-anchor="middle">0 V terminal block (the star point),</text>
+  <text x="240" y="636" class="s b" text-anchor="middle">22 AWG black</text>
+  <text x="240" y="652" class="s" text-anchor="middle">the motors reference CAN to their XT30 -</text>
+
+  <!-- ================= Panels ================= -->
+  <rect class="panel" x="30" y="690" width="500" height="305" rx="8"/>
+  <text x="45" y="718" class="ph">A. Termination check (multimeter, Ω)</text>
+  <text x="45" y="744" class="s">Everything powered OFF and plugged together. Measure</text>
+  <text x="45" y="762" class="s">CAN_H to CAN_L at any connector on the bus:</text>
+  <text x="60" y="784" class="s"><tspan class="b">about 60 Ω</tspan>: correct, two terminators in parallel</text>
+  <text x="60" y="802" class="s"><tspan class="b">about 120 Ω</tspan>: one terminator missing</text>
+  <text x="60" y="820" class="s"><tspan class="b">about 40 Ω</tspan>: three terminators</text>
+  <text x="60" y="838" class="s"><tspan class="b">about 30 Ω</tspan>: four (both drives have built-in ones)</text>
+  <text x="60" y="856" class="s"><tspan class="b">open</tspan>: no terminators, or a broken wire</text>
+  <text x="60" y="874" class="s"><tspan class="b">near 0 Ω</tspan>: CAN_H shorted to CAN_L</text>
+  <text x="45" y="902" class="s">Before building the harness, measure pins 2 to 1 on one</text>
+  <text x="45" y="920" class="s">bare motor. The manual does not say whether the driver</text>
+  <text x="45" y="938" class="s">has a built-in terminator. Open: no, wire as drawn.</text>
+  <text x="45" y="956" class="s">About 120 Ω: both drives have one. Then leave out R_T</text>
+  <text x="45" y="974" class="s">and switch the adapter's 120 Ω off, and recheck for 60 Ω.</text>
+
+  <rect class="panel" x="550" y="690" width="500" height="305" rx="8"/>
+  <text x="565" y="718" class="ph">B. Setting the CAN IDs (once, before wiring)</text>
+  <text x="565" y="744" class="s">Every AK motor ships with CAN ID 1, so two new motors</text>
+  <text x="565" y="762" class="s">on one bus both answer to ID 1.</text>
+  <text x="565" y="788" class="s">1. Connect ONE motor to the CubeMars R-Link (UART</text>
+  <text x="580" y="806" class="s">port, 3-pin) and open the CubeMars upper-computer tool.</text>
+  <text x="565" y="826" class="s">2. Set the ID: LEFT = 1, RIGHT = 2.</text>
+  <text x="565" y="846" class="s">3. Check the CAN rate is 1 Mbit/s and enable</text>
+  <text x="580" y="864" class="s">"Send status over CAN" (cubemars_hardware needs it).</text>
+  <text x="565" y="884" class="s">4. Label the motor with its ID, then do the other one.</text>
+  <text x="565" y="914" class="s">The ROS side expects LEFT = 1 and RIGHT = 2 by default</text>
+  <text x="565" y="932" class="s">(left_can_id / right_can_id). Verify with:</text>
+  <text x="565" y="952" class="s b">pixi run -e robot ros2 run iot_robot_drivers cubemars_tool check</text>
+
+  <rect class="panel" x="1070" y="690" width="500" height="305" rx="8"/>
+  <text x="1085" y="718" class="ph">C. Rules for this bus</text>
+  <text x="1085" y="744" class="s">- One chain, no star: adapter, LEFT, RIGHT, terminator.</text>
+  <text x="1085" y="764" class="s">- Exactly two 120 Ω terminators, one at each end.</text>
+  <text x="1085" y="784" class="s">- Twist the CAN_H/CAN_L pair along its whole length and</text>
+  <text x="1096" y="802" class="s">route it away from the XT30 power leads.</text>
+  <text x="1085" y="822" class="s">- Any branch (stub) off the chain: under 30 cm.</text>
+  <text x="1085" y="842" class="s">- CAN has no GND pin on the motor port. The shared 0 V</text>
+  <text x="1096" y="860" class="s">comes through the motor power leads; the GND wire from</text>
+  <text x="1096" y="878" class="s">the adapter ties it to the same point. Mandatory if the</text>
+  <text x="1096" y="896" class="s">adapter is galvanically isolated.</text>
+  <text x="1085" y="916" class="s">- Plug or unplug CAN only with the motor bus off.</text>
+  <text x="1085" y="944" class="s">AK45-10 V3.0 (one XT30(2+2) plug per motor):</text>
+  <text x="1085" y="962" class="s">pin 3 = CAN_H, pin 4 = CAN_L. See wiring.md.</text>
+</svg>
