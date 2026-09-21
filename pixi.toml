@@ -53,6 +53,8 @@ onnxruntime = ">=1.29.1,<2"
 ros-jazzy-usb-cam = ">=0.8.1,<0.9"
 ros-jazzy-camera-calibration = ">=5.0.13,<6"
 semver = ">=3.0.4,<4"
+pyserial = ">=3.5,<4"
+aiohttp = ">=3.14.3,<4"
 
 [pypi-dependencies]
 mujoco = "==3.10.*"

@@ -1,0 +1,27 @@
+# Picks one velocity command for the base. The highest priority input that published
+# within its timeout wins; shared by the simulation and the real robot.
+twist_mux:
+  ros__parameters:
+    use_stamped: true
+    topics:
+      teleop:
+        topic: cmd_vel/teleop
+        timeout: 1.0
+        priority: 100
+      # Browser controller (iot_robot_web). Below the keyboard so a developer at a
+      # terminal can always take over, above the followers so a visitor can steer
+      web:
+        topic: cmd_vel/web
+        timeout: 0.5
+        priority: 90
+      follower:
+        topic: cmd_vel/follower
+        timeout: 0.5
+        priority: 10
+    locks:
+      # Software emergency stop: while /e_stop is true, every input above is blocked.
+      # timeout 0.0 means the lock only follows the topic value, no heartbeat needed
+      e_stop:
+        topic: e_stop
+        timeout: 0.0
+        priority: 255

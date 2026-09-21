@@ -10,7 +10,8 @@ def generate_launch_description():
     pkg = FindPackageShare("iot_robot_mujoco")
     urdf = PathJoinSubstitution([pkg, "urdf", "iot_robot_sim.urdf.xacro"])
     controllers = PathJoinSubstitution([pkg, "config", "controllers.yaml"])
-    twist_mux = PathJoinSubstitution([pkg, "config", "twist_mux.yaml"])
+    twist_mux = PathJoinSubstitution(
+        [FindPackageShare("iot_robot_behavior"), "config", "twist_mux.yaml"])
     headless = LaunchConfiguration("headless")
 
     robot_description = ParameterValue(

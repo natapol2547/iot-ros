@@ -475,6 +475,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/pyproject_hooks-1.2.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/pyqt-builder-1.18.2-pyhd8ed1ab_1.conda
+      - conda: https://prefix.dev/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-9.1.1-pyhc364b38_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-cov-7.1.0-pyhcf101f3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/pytest-repeat-0.9.4-pyhd8ed1ab_0.conda
@@ -2853,7 +2854,7 @@ packages:
   license: BSD-3-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/kiwisolver?source=compressed-mapping
+  - pkg:pypi/kiwisolver?source=hash-mapping
   run_exports: {}
   size: 75073
   timestamp: 1787938396652
@@ -5411,7 +5412,7 @@ packages:
   license: Apache-2.0
   license_family: APACHE
   purls:
-  - pkg:pypi/msgpack?source=compressed-mapping
+  - pkg:pypi/msgpack?source=hash-mapping
   run_exports: {}
   size: 114260
   timestamp: 1788170252387
@@ -6006,7 +6007,7 @@ packages:
   - python_abi 3.12.* *_cp312
   license: LGPL-2.1-only OR MPL-1.1
   purls:
-  - pkg:pypi/pycairo?source=compressed-mapping
+  - pkg:pypi/pycairo?source=hash-mapping
   run_exports: {}
   size: 121832
   timestamp: 1788362011791
@@ -6888,7 +6889,7 @@ packages:
   license: BSD-2-Clause
   license_family: BSD
   purls:
-  - pkg:pypi/wrapt?source=compressed-mapping
+  - pkg:pypi/wrapt?source=hash-mapping
   run_exports: {}
   size: 141669
   timestamp: 1788174911031
@@ -8601,6 +8602,19 @@ packages:
   run_exports: {}
   size: 2952282
   timestamp: 1766858321453
+- conda: https://prefix.dev/conda-forge/noarch/pyserial-3.5-pyhcf101f3_2.conda
+  sha256: 8c618e8ca376d73133c9971abe45463a48c9cfb529788d609fd19568764941ba
+  md5: b27a6cd32160c34682ce6053b04c12c6
+  depends:
+  - python >=3.10
+  - python
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/pyserial?source=hash-mapping
+  run_exports: {}
+  size: 73910
+  timestamp: 1767289527295
 - conda: https://prefix.dev/conda-forge/noarch/pytest-9.1.1-pyhc364b38_2.conda
   sha256: 430051d80765207a7d782b2b188230ba1489d35c6e75fd9903f76cb9fda4af16
   md5: 64c98a12c4e23eb238bf66bbecafdf3c
