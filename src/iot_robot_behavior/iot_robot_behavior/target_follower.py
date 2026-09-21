@@ -4,7 +4,6 @@ import math
 
 import rclpy
 from geometry_msgs.msg import PointStamped, TwistStamped
-from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
@@ -36,6 +35,9 @@ class TargetFollower(Node):
         # Gizmo pitch while searching. A ball lies on the floor (0.0), but a person's
         # torso is above a level camera's view unless the camera tilts up
         self.search_pitch = self.declare_parameter("search_pitch", 0.0).value
+        # Give up searching after this long, so the robot doesn't spin forever
+        self.search_timeout = self.declare_parameter(
+            "search_timeout", 10.0).value
         # A frame that stays put while the robot moves
         self.world_frame = self.declare_parameter("world_frame", "odom").value
 
@@ -78,14 +80,16 @@ class TargetFollower(Node):
         cmd.header.stamp = self.get_clock().now().to_msg()
         cmd.header.frame_id = "base_link"
 
-        visible = (self.last_seen is not None
-                   and self.get_clock().now() - self.last_seen < Duration(seconds=self.lost_timeout))
-        if not visible:
-            # Target lost: recentre the gizmo and turn towards where it was last seen
+        unseen = (math.inf if self.last_seen is None
+                  else (self.get_clock().now() - self.last_seen).nanoseconds * 1e-9)
+        if unseen > self.lost_timeout:
+            # Target lost: recentre the gizmo and turn towards where it was last seen.
+            # Stand still if there never was a target or the search took too long
             self.gizmo_pub.publish(Float64MultiArray(
                 data=[0.0, self.search_pitch]))
-            cmd.twist.angular.z = math.copysign(
-                self.search_angular, self.last_bearing)
+            if unseen < self.search_timeout:
+                cmd.twist.angular.z = math.copysign(
+                    self.search_angular, self.last_bearing)
             self.cmd_vel_pub.publish(cmd)
             return
 

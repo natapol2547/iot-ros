@@ -7,6 +7,10 @@ person_detector:
     torso_ratio: 0.29
     num_threads: 4
     level_frame: base_link
+    match_threshold: 0.75
+    update_threshold: 0.85
+    enroll_duration: 2.0
+    recent_size: 30
 
 target_follower:
   ros__parameters:
@@ -18,3 +22,4 @@ target_follower:
     lost_timeout: 1.0
     search_angular: 0.8
     search_pitch: -0.35
+    search_timeout: 10.0

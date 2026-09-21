@@ -15,6 +15,8 @@ ball = "ros2 run iot_robot_perception ball_detector"
 follow = "ros2 launch iot_robot_behavior ball_follow.launch.py"
 person = "ros2 launch iot_robot_perception person_webcam.launch.py"
 follow-person = "ros2 launch iot_robot_behavior person_follow.launch.py"
+enroll = "ros2 service call /person_detector/enroll std_srvs/srv/Trigger"
+forget = "ros2 service call /person_detector/forget std_srvs/srv/Trigger"
 
 
 [activation]
