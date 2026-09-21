@@ -1,0 +1,25 @@
+# systemd-networkd: bring up can0 at 1 Mbit/s whenever it appears.
+#
+# Works for adapters with a native SocketCAN driver (gs_usb/candleLight, PEAK,
+# usb_8dev) and SPI CAN HATs. networkd configures the link each time the interface
+# appears, so a USB adapter plugged in after boot is set up too.
+#
+# slcan adapters cannot be configured here: their bitrate is set by slcand, not
+# over netlink. Use `deploy/scripts/can_up.sh --slcan <tty>` for those (see
+# deploy/README.md).
+#
+# networkd only touches links that match a .network file, so it coexists with
+# NetworkManager, which keeps managing Wi-Fi and Ethernet.
+
+[Match]
+Name=can0
+
+[Link]
+# A CAN link carries no IP traffic; never hold up network-online.target on it.
+RequiredForOnline=no
+
+[CAN]
+BitRate=1M
+# Recover automatically from bus-off (e.g. a motor powered on mid-frame) instead of
+# staying down until someone runs `ip link set can0 down/up`.
+RestartSec=100ms

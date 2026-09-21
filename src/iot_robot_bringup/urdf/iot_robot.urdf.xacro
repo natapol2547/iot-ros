@@ -1,0 +1,72 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="iot_robot">
+
+    <!-- mock:=true replaces the motors with mock_components, for testing without CAN -->
+    <xacro:arg name="mock" default="false" />
+    <xacro:arg name="can_interface" default="can0" />
+    <xacro:arg name="left_can_id" default="1" />
+    <xacro:arg name="right_can_id" default="2" />
+    <!-- 1 or -1: whether a positive motor speed turns that wheel forward. Both joint axes
+         point to the robot's left (+y), but the motors are mirror-mounted with their output
+         faces outwards, so with the same motor convention exactly one needs flipping.
+         Check with `cubemars_tool jog` (docs/hardware.md) before the first drive -->
+    <xacro:arg name="left_direction" default="1" />
+    <xacro:arg name="right_direction" default="-1" />
+
+    <!-- The physical robot: links, joints, meshes, camera and ultrasonic frames -->
+    <xacro:include filename="$(find iot_robot_description)/urdf/robot.urdf.xacro" />
+
+    <!-- CubeMars AK45-10 (datasheet): 14 pole pairs, 10:1 reduction, motor-side torque
+         constant 0.127 Nm/A. cubemars_hardware multiplies speed commands, speed and effort
+         feedback by gear_ratio, so a negative gear_ratio reverses a wheel consistently.
+         Position feedback ignores the sign, which is why diff_drive uses velocity only -->
+    <xacro:macro name="wheel" params="joint can_id direction">
+        <joint name="${joint}">
+            <xacro:unless value="$(arg mock)">
+                <param name="can_id">${can_id}</param>
+                <param name="pole_pairs">14</param>
+                <param name="gear_ratio">${10 * direction}</param>
+                <param name="kt">0.127</param>
+            </xacro:unless>
+            <command_interface name="velocity" />
+            <state_interface name="position">
+                <param name="initial_value">0.0</param>
+            </state_interface>
+            <state_interface name="velocity">
+                <param name="initial_value">0.0</param>
+            </state_interface>
+            <xacro:unless value="$(arg mock)">
+                <state_interface name="effort" />
+            </xacro:unless>
+        </joint>
+    </xacro:macro>
+
+    <ros2_control name="WheelSystem" type="system">
+        <hardware>
+            <xacro:if value="$(arg mock)">
+                <plugin>mock_components/GenericSystem</plugin>
+                <!-- Integrate velocity commands into position so odometry moves -->
+                <param name="calculate_dynamics">true</param>
+            </xacro:if>
+            <xacro:unless value="$(arg mock)">
+                <!-- cubemars_hardware wrapped by cubemars_hardware_safe
+                     (src/external/cubemars_hardware_safe): the motors get zero speed and
+                     are released whenever the component stops, and both wheels stop
+                     when a motor reports a fault or sends no status for
+                     status_timeout_ms (the motors send status at 100-200 Hz) -->
+                <plugin>cubemars_hardware_safe/SafeCubeMarsSystemHardware</plugin>
+                <param name="can_interface">$(arg can_interface)</param>
+                <param name="status_timeout_ms">100</param>
+                <param name="brake_time_ms">300</param>
+            </xacro:unless>
+        </hardware>
+        <xacro:wheel joint="wheel_joint_left" can_id="$(arg left_can_id)"
+            direction="$(arg left_direction)" />
+        <xacro:wheel joint="wheel_joint_right" can_id="$(arg right_can_id)"
+            direction="$(arg right_direction)" />
+    </ros2_control>
+
+    <!-- The gizmo joints are not in ros2_control on the real robot: stm32_bridge publishes
+         their joint states and, in servo mode, drives hobby servos from the Nucleo -->
+
+</robot>

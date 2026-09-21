@@ -1,0 +1,13 @@
+# camera_ros driving the Raspberry Pi Camera v2.1 (Sony IMX219) through libcamera.
+# The launch file adds camera_info_url.
+camera:
+  ros__parameters:
+    # 1640x1232 is the IMX219's full field of view with 2x2 binning; the ISP scales it to
+    # the output size. Smaller sensor modes crop the image and change the intrinsics
+    sensor_mode: "1640:1232"
+    width: 640
+    height: 480
+    # libcamera's RGB888 is stored B, G, R: published as bgr8, which cv_bridge and the
+    # web page use without a conversion
+    format: "RGB888"
+    frame_id: camera_optical_frame

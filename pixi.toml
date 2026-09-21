@@ -2,37 +2,54 @@
 name = "iot-ros"
 version = "0.1.0"
 channels = ["https://prefix.dev/robostack-jazzy", "conda-forge"]
-platforms = ["linux-64"]
+# linux-64 is the laptop (simulation). The glibc-2-36 entries are for the
+# `robot` environment: linux-aarch64 is the Raspberry Pi, and the linux-64
+# variant lets the robot environment be built and tested on the laptop.
+# glibc 2.36 is Raspberry Pi OS Bookworm (Trixie has 2.41); declaring it lets
+# the solver pick a sysroot with kernel 5.14 headers, which cubemars_hardware
+# needs for can_frame.len.
+platforms = [
+  "linux-64",
+  { name = "linux-64-glibc-2-36", platform = "linux-64", glibc = "2.36" },
+  { name = "linux-aarch64-glibc-2-36", platform = "linux-aarch64", glibc = "2.36" },
+]
 
+# Environments:
+#   default  laptop: MuJoCo simulation, RViz, webcam tools
+#   robot    Raspberry Pi: real hardware, headless
+# On the Pi every command needs `-e robot`, e.g. `pixi run -e robot build`,
+# because the default environment does not exist for linux-aarch64.
+[environments]
+default = ["sim"]
+robot = ["robot"]
+
+# Tasks shared by both environments. Behaviour that differs per environment is
+# selected through the IOT_* variables set in each feature's activation.env.
 [tasks]
-build = "colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
+build = "colcon build --symlink-install $IOT_COLCON_IGNORE --cmake-args -DCMAKE_BUILD_TYPE=Release"
 clean = "rm -rf build install log"
-display = "ros2 launch iot_robot_description display.launch.py"
-mjcf = "xacro src/iot_robot_description/urdf/robot.urdf.xacro -o /tmp/iot_robot.urdf && ros2 run mujoco_ros2_control make_mjcf_from_robot_description.py --urdf /tmp/iot_robot.urdf --mujoco_inputs src/iot_robot_mujoco/mjcf/mujoco_inputs.xml --output src/iot_robot_mujoco/mjcf --add_free_joint --no-fuse --save_only"
-sim = { cmd = "ros2 launch iot_robot_mujoco sim.launch.py", depends-on = ["mjcf", "build"] }
 teleop = "ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -r cmd_vel:=/cmd_vel/teleop"
 ball = "ros2 run iot_robot_perception ball_detector"
-follow = "ros2 launch iot_robot_behavior ball_follow.launch.py"
-person = "ros2 launch iot_robot_perception person_webcam.launch.py"
-follow-person = "ros2 launch iot_robot_behavior person_follow.launch.py"
+follow = "ros2 launch iot_robot_behavior ball_follow.launch.py use_sim_time:=$IOT_USE_SIM_TIME"
+follow-person = "ros2 launch iot_robot_behavior person_follow.launch.py use_sim_time:=$IOT_USE_SIM_TIME"
 enroll = "ros2 service call /person_detector/enroll std_srvs/srv/Trigger"
 forget = "ros2 service call /person_detector/forget std_srvs/srv/Trigger"
-
+# Real-robot launch with mock_components instead of the motors. Extra
+# arguments are appended, e.g. `pixi run robot-mock web:=false`.
+robot-mock = "ros2 launch iot_robot_bringup robot.launch.py mock:=true camera:=false"
+bridge = "ros2 run iot_robot_drivers stm32_bridge"
+fake-stm32 = "ros2 run iot_robot_drivers fake_stm32"
+# Bring up can0 at 1 Mbit/s by hand (deploy/ configures it at boot instead).
+can-up = "sudo deploy/scripts/can_up.sh"
+# Checks that the CAN interface is up and both motors send status frames.
+can-check = "ros2 run iot_robot_drivers cubemars_tool check"
 
 [activation]
 scripts = ["scripts/activate.sh"]
 
 [dependencies]
-# Core ROS 2 — desktop brings RViz, robot_state_publisher, tf2
-ros-jazzy-desktop = "*"
+# Shared by the laptop and the robot.
 ros-jazzy-xacro = "*"
-
-# The shared control layer between sim and hardware
-ros-jazzy-ros2-control = "*"
-ros-jazzy-ros2-controllers = "*"
-
-# Simulation
-ros-jazzy-mujoco-ros2-control = "*"
 
 # Drive the robot with the keyboard
 ros-jazzy-teleop-twist-keyboard = "*"
@@ -45,17 +62,86 @@ ninja = "*"
 pkg-config = "*"
 colcon-common-extensions = "*"
 ros-jazzy-ament-cmake = "*"
-ros-jazzy-joint-state-publisher-gui = ">=2.4.3,<3"
-trimesh = ">=5.1.0,<6"
 setuptools = "<80"
 ros-jazzy-twist-mux = ">=4.5.0,<5"
 onnxruntime = ">=1.29.1,<2"
-ros-jazzy-usb-cam = ">=0.8.1,<0.9"
-ros-jazzy-camera-calibration = ">=5.0.13,<6"
-semver = ">=3.0.4,<4"
 pyserial = ">=3.5,<4"
 aiohttp = ">=3.14.3,<4"
 
-[pypi-dependencies]
+# ---------------------------------------------------------------------------
+# Laptop: simulation and desktop tools.
+[feature.sim]
+platforms = ["linux-64"]
+
+[feature.sim.activation.env]
+# cubemars_hardware needs linux/can.h from kernel >= 5.11 (can_frame.len);
+# this environment's sysroot ships 4.18 headers, and mock:=true does not
+# need the plugin (nor cubemars_hardware_safe, which builds on it).
+# --packages-ignore rather than --packages-skip: colcon refuses to build a
+# package whose skipped dependency was never installed.
+IOT_COLCON_IGNORE = "--packages-ignore cubemars_hardware cubemars_hardware_safe"
+IOT_USE_SIM_TIME = "true"
+
+[feature.sim.tasks]
+display = "ros2 launch iot_robot_description display.launch.py"
+mjcf = "xacro src/iot_robot_description/urdf/robot.urdf.xacro -o /tmp/iot_robot.urdf && ros2 run mujoco_ros2_control make_mjcf_from_robot_description.py --urdf /tmp/iot_robot.urdf --mujoco_inputs src/iot_robot_mujoco/mjcf/mujoco_inputs.xml --output src/iot_robot_mujoco/mjcf --add_free_joint --no-fuse --save_only"
+sim = { cmd = "ros2 launch iot_robot_mujoco sim.launch.py", depends-on = ["mjcf", "build"] }
+person = "ros2 launch iot_robot_perception person_webcam.launch.py"
+web = "ros2 launch iot_robot_web web.launch.py use_sim_time:=true"
+
+[feature.sim.dependencies]
+# Core ROS 2 — desktop brings RViz, robot_state_publisher, tf2
+ros-jazzy-desktop = "*"
+
+# The shared control layer between sim and hardware
+ros-jazzy-ros2-control = "*"
+ros-jazzy-ros2-controllers = "*"
+
+# Simulation
+ros-jazzy-mujoco-ros2-control = "*"
+
+ros-jazzy-joint-state-publisher-gui = ">=2.4.3,<3"
+trimesh = ">=5.1.0,<6"
+ros-jazzy-usb-cam = ">=0.8.1,<0.9"
+ros-jazzy-camera-calibration = ">=5.0.13,<6"
+semver = ">=3.0.4,<4"
+
+[feature.sim.pypi-dependencies]
 mujoco = "==3.10.*"
 obj2mjcf = ">=0.0.25, <0.0.26"
+
+# ---------------------------------------------------------------------------
+# Raspberry Pi: headless runtime for the real robot.
+[feature.robot]
+platforms = ["linux-64-glibc-2-36", "linux-aarch64-glibc-2-36"]
+
+[feature.robot.activation.env]
+IOT_COLCON_IGNORE = ""
+IOT_USE_SIM_TIME = "false"
+
+[feature.robot.tasks]
+robot = "ros2 launch iot_robot_bringup robot.launch.py"
+
+[feature.robot.dependencies]
+# ros_base: rclcpp/rclpy, tf2, robot_state_publisher, urdf; no GUI tools.
+ros-jazzy-ros-base = "*"
+# Granular ros2_control packages; the ros2_controllers metapackage pulls rqt.
+ros-jazzy-controller-manager = "*"
+ros-jazzy-hardware-interface = "*"
+ros-jazzy-diff-drive-controller = "*"
+ros-jazzy-joint-state-broadcaster = "*"
+ros-jazzy-ros2controlcli = "*"
+# Raspberry Pi Camera v2.1 through libcamera
+ros-jazzy-camera-ros = "*"
+ros-jazzy-cv-bridge = "*"
+ros-jazzy-tf2-geometry-msgs = "*"
+
+[feature.robot.target.linux-64.dependencies]
+sysroot_linux-64 = ">=2.34"
+
+[feature.robot.target.linux-aarch64.dependencies]
+sysroot_linux-aarch64 = ">=2.34"
+# Use the Raspberry Pi fork of libcamera, the same code Raspberry Pi OS ships
+# for rpicam-apps, so camera behaviour matches `rpicam-hello` on the host.
+# ros-jazzy-camera-ros 0.7 is built against libcamera 0.5.
+libcamera = { version = ">=0.5,<0.6", build = "*rpi_fork*" }

@@ -1,0 +1,14 @@
+# Nucleo-F401RE sensor board (ultrasonics, battery voltage, gizmo servos).
+#
+# The board's USB port is the on-board ST-LINK/V2-1 debugger; its virtual COM port
+# (USB ID 0483:374b) enumerates as /dev/ttyACM<n>. <n> depends on plug order and on
+# other CDC-ACM devices such as an slcan CAN adapter, so stm32_bridge opens the stable
+# /dev/stm32 symlink instead.
+#
+# ID_MM_DEVICE_IGNORE stops ModemManager, if installed, from probing the port with
+# AT commands at plug-in.
+#
+# With several ST-LINK boards attached, pin this one by serial number: find it with
+#   udevadm info --query=property --name=/dev/ttyACM0 | grep ID_SERIAL_SHORT
+# and add ATTRS{serial}=="<value>" to the match.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="374b", SYMLINK+="stm32", GROUP="dialout", MODE="0660", ENV{ID_MM_DEVICE_IGNORE}="1"

@@ -1,0 +1,26 @@
+# Starting calibration for the Raspberry Pi Camera v2.1 at 640x480 from the 1640:1232 mode,
+# computed from the datasheet field of view (62.2 x 48.8 deg) and matching the simulated
+# camera (fovy 48.8 deg): fy = 240 / tan(24.4 deg) = 529.1, square pixels, centred principal
+# point, no distortion. Replace it with a real calibration (docs/hardware.md); the launch
+# file copies this to ~/.ros/camera_info/iot_robot_camera.yaml, where
+# camera_calibration's "commit" writes the result.
+image_width: 640
+image_height: 480
+camera_name: iot_robot_camera
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [529.1, 0.0, 320.0, 0.0, 529.1, 240.0, 0.0, 0.0, 1.0]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0.0, 0.0, 0.0, 0.0, 0.0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [529.1, 0.0, 320.0, 0.0, 0.0, 529.1, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]

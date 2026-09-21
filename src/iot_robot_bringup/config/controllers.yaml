@@ -1,0 +1,39 @@
+controller_manager:
+  ros__parameters:
+    # One CAN round trip per cycle: a speed command out to each motor, their status frames
+    # in. The motors should send status at 100-200 Hz (twice this rate or more), because
+    # cubemars_hardware warns on every cycle that finds no new frame from a motor
+    update_rate: 50
+    enforce_command_limits: true
+
+joint_state_broadcaster:
+  ros__parameters:
+    type: joint_state_broadcaster/JointStateBroadcaster
+
+diff_drive_controller:
+  ros__parameters:
+    type: diff_drive_controller/DiffDriveController
+    left_wheel_names: ["wheel_joint_left"]
+    right_wheel_names: ["wheel_joint_right"]
+    # Same geometry as the simulation (iot_robot_mujoco/config/controllers.yaml)
+    wheel_separation: 0.349
+    wheel_radius: 0.0754
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    enable_odom_tf: true
+    publish_rate: 50.0
+    cmd_vel_timeout: 0.5
+    # Odometry from wheel speed, not position: the motor reports position as an int16 in
+    # 0.1 deg that saturates at +-3200 deg (about 4 m of travel), and cubemars_hardware
+    # does not apply the wheel direction flip to it
+    position_feedback: false
+    # Conservative limits for first runs on the real robot (the simulation allows 1.0 m/s
+    # and 4.0 rad/s). The AK45-10 is rated 150 rpm, about 1.18 m/s at this wheel radius
+    linear.x.max_velocity: 0.5
+    linear.x.min_velocity: -0.5
+    linear.x.max_acceleration: 1.0
+    linear.x.max_deceleration: -2.0
+    angular.z.max_velocity: 2.0
+    angular.z.min_velocity: -2.0
+    angular.z.max_acceleration: 4.0
+    angular.z.max_deceleration: -8.0

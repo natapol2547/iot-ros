@@ -1,0 +1,10 @@
+<library path="cubemars_hardware_safe">
+  <class name="cubemars_hardware_safe/SafeCubeMarsSystemHardware"
+         type="cubemars_hardware_safe::SafeCubeMarsSystemHardware"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      cubemars_hardware/CubeMarsSystemHardware plus stop-on-exit and a motor fault and
+      status watchdog that stops both wheels.
+    </description>
+  </class>
+</library>
