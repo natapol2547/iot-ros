@@ -45,8 +45,13 @@ Person following in the sim:
 
 ```bash
 pixi run sim
-pixi run follow-person   # second terminal; drag the mannequin and the robot follows
+pixi run follow-person   # second terminal
+pixi run enroll          # third terminal; remembers the person nearest the image centre
 ```
+
+The robot stands still until someone is enrolled. On a real camera, raising both hands above
+the head for 2 s enrolls that person instead. `pixi run forget` clears the memory. Drag the red
+mannequin around and the robot follows it, ignoring the green one.
 
 Image topics can be viewed with:
 
@@ -70,6 +75,8 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `follow` | Ball detector + target follower |
 | `person` | Laptop webcam + person detector (Step 6) |
 | `follow-person` | Person detector + target follower in the sim (Step 6b) |
+| `enroll` | Calls `/person_detector/enroll`: remember the person nearest the image centre (Step 7) |
+| `forget` | Calls `/person_detector/forget`: clear the remembered person |
 
 `scripts/activate.sh` sources `install/setup.bash` on every `pixi run`, so built packages are
 always on the path.
@@ -110,8 +117,9 @@ twist_mux gives teleop priority 100 (timeout 1.0 s) over the follower's priority
 returns to the follower about a second after the last key press. The teleop timeout is long
 because `teleop_twist_keyboard` only publishes while a key is pressed.
 
-Other useful topics:
+Other useful topics and services:
 
+- `/person_detector/enroll`, `/person_detector/forget` (`std_srvs/srv/Trigger`)
 - `/joint_states`: wheel and gizmo joint positions
 - `/diff_drive_controller/odom` and the `odom → base_footprint` TF
 - `/simulator/floating_base_state`: ground-truth robot pose from MuJoCo (sim only)
@@ -126,8 +134,10 @@ Other useful topics:
 | Gizmo pitch limits | −0.785 … 0 rad (negative tilts **up**) | URDF + `mujoco_inputs.xml` |
 | Camera | 640 × 480, vertical FOV 48.8°, fy ≈ 529 px, 15 Hz in sim | `mujoco_inputs.xml`, sim xacro |
 | Ball | 10 cm diameter, yellow, starts 1 m ahead | `mjcf/scene.xml` |
-| Sim person | 1.70 m capsule mannequin, starts 2.5 m ahead; shoulders 1.38 m, hips 0.92 m | `mjcf/scene.xml` |
+| Sim person | 1.70 m capsule mannequin, red shirt, starts 2.5 m ahead; shoulders 1.38 m, hips 0.92 m | `mjcf/scene.xml` |
+| Second sim person | same mannequin, green shirt and khaki trousers, starts at (2.0, −0.9) | `mjcf/scene.xml` |
 | Follow distance | ball 0.6 m, person 1.5 m | `iot_robot_behavior/config/*.yaml` |
+| ReID thresholds | match 0.75, learn new looks above 0.85, hands up for 2.0 s | `iot_robot_behavior/config/person_follow.yaml` |
 
 ## Progress
 
@@ -139,7 +149,8 @@ Other useful topics:
       checked with a tape measure
 - [x] Step 6b: follow a person (a draggable mannequin) in the sim. The follower keeps the target
       in the `odom` frame between detections, and distance accounts for the camera's tilt
-- [ ] Step 7: re-identification, so the robot remembers one specific person
+- [ ] Step 7: re-identification, so the robot remembers one specific person. Prototype verified
+      in sim (service enrollment, two mannequins); gesture enrollment still to be tried on the webcam
 - [ ] Step 8: real hardware (CubeMars motors, Pi camera, IMU, STM32 ultrasonics)
 
 ## Perception
@@ -181,8 +192,8 @@ estimate against the depth camera. The error is below 1.5 % from 0.95 m to 3.7 m
     mannequin was turned 45°.
   - With `level_frame` empty (a webcam with no TF), the camera is assumed level. For a level
     camera both formulas give the same answer.
-- **Target choice:** the largest person whose shoulders and hips are both visible. This is
-  replaced by re-identification in Step 7.
+- **Target choice:** in Step 6 this was the largest person whose shoulders and hips are both
+  visible. Since Step 7 it is the person who best matches the enrolled appearance (see below).
 - **Licence:** YOLO26 weights are AGPL-3.0. That is fine for this project, but it matters if the
   robot or its software is ever distributed commercially.
 - **Accuracy:** after webcam calibration, distances at 1, 2 and 3 m matched a tape measure with
@@ -244,6 +255,75 @@ To check the distance, stand at measured distances and watch
 - **Constant ratio error:** adjust `torso_ratio`.
 - **Error that changes with distance:** redo the calibration.
 
+### Re-identification (Step 7)
+
+The pose model finds *people*; re-identification (ReID) decides which one is *the* person.
+Every person with a visible torso gets a 512-number appearance "fingerprint" (embedding).
+Embeddings of the same person point in nearly the same direction, so similarity is a dot
+product of unit vectors (cosine similarity, 1.0 = identical).
+
+- **Model:** OSNet x0.25 trained on MSMT17 (`osnet_x0_25_msmt17`), exported to ONNX. Input
+  `images` `[1, 3, 256, 128]` (a tall person crop), output `output0` `[1, 512]`, 1.9 MB.
+  - Preprocessing: crop the YOLO box, stretch it to 128 × 256 (no letterbox), BGR → RGB, /255,
+    subtract ImageNet mean `(0.485, 0.456, 0.406)`, divide by std `(0.229, 0.224, 0.225)`, CHW.
+  - The output is **not** normalised; the node divides by its length.
+  - Batch size is fixed at 1, so the node runs it once per person. In sim, with two people in
+    view, the detector still ran at about 10 Hz.
+- **Code:** `iot_robot_perception/reid.py` holds `ReidEncoder` (the ONNX session and
+  preprocessing) and `Gallery` (the stored embeddings). `person_detector.py` uses both.
+- **Gallery:** two lists.
+  - `enrolled`: embeddings captured at enrollment. They are never replaced, so the gallery cannot
+    slowly drift onto someone else.
+  - `recent`: the last 30 embeddings of the target while following, to cope with new angles
+    and lighting. A new one is only added when the match is above `update_threshold` (0.85)
+    **and** nobody else in view is above `match_threshold`.
+  - A person's score is the best similarity against both lists.
+- **Target choice:** the person with the highest score, if it is at least `match_threshold`
+  (0.75). If nobody matches, nothing is published and the follower searches, then stops.
+- **Enrollment by gesture:** both wrists at least half a torso length above the shoulders
+  (image y, so it works at any distance), held for `enroll_duration` (2 s).
+  - Every frame of the gesture adds an embedding, so enrollment stores about 10–20 views.
+  - A single missed frame is forgiven; a gap longer than 0.5 s restarts the timer.
+  - If several people raise their hands, the largest (closest) wins. Anyone can take over
+    the robot by raising their hands.
+- **Enrollment by service:** `/person_detector/enroll` stores the person whose box centre is
+  nearest the image centre. It exists for the sim and for testing.
+- **Not saved to disk:** the gallery is lost when the node restarts.
+- **Licences:** the OSNet architecture and training code (torchreid) are MIT. MSMT17 is a
+  research dataset, so check its terms before any commercial use. `boxmot`, used only to export,
+  is AGPL-3.0; nothing from it runs on the robot.
+
+Sim results (two mannequins, red one enrolled with the service):
+
+| | Similarity to the enrolled red mannequin |
+| --- | --- |
+| Red mannequin, same pose and other distances/angles | 0.80–0.99 |
+| Green shirt, khaki trousers | 0.50–0.70 |
+| Blue shirt, same navy trousers (offline test) | up to 0.76 |
+
+With the green mannequin closer and bigger in the image, the Step 6 rule would have followed
+it. With ReID the robot drove straight to the red one and stopped 1.5 m away. Similar-looking
+clothes (the blue shirt case) come close to the threshold. On real people, watch the `sim`
+labels in `/person/debug_image` and tune `match_threshold`.
+
+#### Exporting the ReID model
+
+Run in a normal terminal, not through `pixi run`. The first run downloads CPU PyTorch and
+friends into the uv cache (several hundred MB) and can take a few minutes.
+
+```bash
+cd ~/iot-ros
+uvx --torch-backend cpu --from "boxmot[onnx]" \
+  boxmot export --weights "$PWD/models/osnet_x0_25_msmt17.pt" --include onnx
+uv cache clean torch torchvision boxmot   # reclaims the space afterwards
+```
+
+- **Pass an absolute `--weights` path.** With a bare file name, boxmot downloads the weights
+  (from Google Drive) and writes the ONNX file into its own install folder inside the uv cache.
+- `RuntimeError: ... axes_input_to_attribute.h ... Assertion node->hasAttribute(kaxes) failed`
+  is printed during export but is harmless. The export finishes with "parity OK".
+- It also writes `osnet_x0_25_msmt17.onnx.metadata.json`, which is not needed at runtime.
+
 ## Behaviour: target_follower
 
 One node follows both the ball and the person; only the launch file and config differ.
@@ -268,6 +348,9 @@ One node follows both the ball and the person; only the launch file and config d
   - For the ball, `search_pitch` is 0.
   - For a person it is −0.35 rad (tilted up 20°). A level camera 0.23 m off the floor only sees
     legs at 2.5 m, so the torso is never detected and the robot spins forever.
+- It stops searching and stands still after `search_timeout` (10 s), and also stands still if it
+  has never seen a target. Before Step 7 it spun from start-up, which would sweep the camera
+  away from someone trying to enroll.
 
 Results in sim:
 
@@ -310,6 +393,11 @@ These cost real debugging time. Check here first when something similar breaks.
 - YOLO does not recognise every simple shape as a person. A first mannequin made of a few blobby
   capsules scored 0.02 at 1.5 m. Separate shoulders, a boxy torso, hips, sleeves and hair raised
   that to 0.7–0.9 when facing or turned 45°. Side-on (90°) it is still not detected.
+- **The mannequin needs a face.** Facing the camera squarely, the faceless mannequin scored only
+  0.1–0.3, below the 0.4 threshold. Step 6b only worked because the robot's search spin viewed it
+  at an angle. Two dark sphere eyes and a sphere nose raised that to about 0.65–0.75.
+- **A mannequin with raised arms is not detected** (scores below 0.3 for straight, Y and goalpost
+  poses), so the hands-up gesture cannot be tested in sim. Test it on the webcam.
 - With the scene's `<compiler angle="radian">` (from the generated description), `euler` in
   `scene.xml` is in radians, not degrees.
 
