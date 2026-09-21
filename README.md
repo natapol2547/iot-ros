@@ -11,22 +11,49 @@ The whole ROS environment is managed by [pixi](https://pixi.sh) using
 
 | Part | Details |
 | --- | --- |
-| Computer | Raspberry Pi with a CAN interface |
-| Drive | 2 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) over CAN |
+| Computer | Raspberry Pi, running the `robot` pixi environment |
+| Drive | 2 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) on a 1 Mbit/s CAN bus through a USB-CAN adapter |
 | Camera | Raspberry Pi Camera v2.1 (IMX219, 62.2° × 48.8° FOV) on a pan/tilt "gizmo" |
-| Range | 2 × ultrasonic sensors angled ±45° forward, read by an STM32 that talks to the Pi over I2C |
-| IMU | LSM9DS1 on the Pi's I2C bus |
+| Range | 2 × HC-SR04 ultrasonic sensors angled ±45° forward, read by a Nucleo-F401RE (STM32) over USB serial |
+| Power | 6S LiPo (24 V nominal) for the motors, 5 V buck converter for the Pi |
+| IMU | LSM9DS1, not used by the software yet |
 
 There is no lidar, so Nav2 is not used. Following is done with visual servoing.
+
+Everything about the real robot is in [docs/](docs/):
+
+- [docs/wiring.md](docs/wiring.md): connection diagrams, parts list, fuses, CAN termination,
+  the Nucleo pinout and a safety checklist before the first power-on.
+- [docs/hardware.md](docs/hardware.md): Raspberry Pi setup, motor configuration, how the wheels
+  are stopped, the first power-on checklist and troubleshooting.
+- [docs/web.md](docs/web.md): the browser controller.
+- [deploy/README.md](deploy/README.md): the systemd service, udev rule and CAN setup installed
+  on the Pi.
+
+The Nucleo firmware lives in its own repository,
+[iot-stm32](https://github.com/natapol2547/iot-stm32) (STM32CubeMX + CMake).
 
 ## Quick start
 
 ```bash
+git clone --recurse-submodules <this repository>   # or `git submodule update --init` later
 pixi install          # first time only
 pixi run sim          # regenerates the MJCF, builds, launches MuJoCo + controllers
 pixi run teleop       # (second terminal) drive with the keyboard
 pixi run follow       # (second terminal) detect and follow the yellow ball
+pixi run web          # (second terminal) browser controller on http://localhost:8080
 ```
+
+The submodule is the upstream CubeMars ros2_control plugin. The laptop build skips it (see
+[Pixi environments](#pixi-environments)), so the simulation works without it.
+
+The web page drives the robot with a joystick or WASD, switches between driving, ball following
+and person following, aims the camera, and shows both ultrasonic sensors as blinking
+green/yellow/red lights. Anyone on the same network can open it at
+`http://<computer's address>:8080`; one person drives at a time and everyone can press STOP.
+See [docs/web.md](docs/web.md).
+
+![Web controller](docs/web/desktop.png)
 
 To move the ball or the mannequin in the MuJoCo viewer:
 
@@ -77,23 +104,50 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `follow-person` | Person detector + target follower in the sim (Step 6b) |
 | `enroll` | Calls `/person_detector/enroll`: remember the person nearest the image centre (Step 7) |
 | `forget` | Calls `/person_detector/forget`: clear the remembered person |
+| `web` | Browser controller for the sim on port 8080 |
+| `robot-mock` | The real robot's launch with simulated motors and no camera; extra arguments are appended |
+| `bridge` | STM32 bridge on its own (`/ultrasonic/*`, `/battery_state`) |
+| `fake-stm32` | A fake Nucleo on a pseudo-terminal, for testing without the board (`--fault left` fakes an unplugged sensor) |
+| `can-up` | Brings `can0` up at 1 Mbit/s by hand |
+| `can-check` | Checks that `can0` is up and both motors send status frames |
+| `robot` | `robot` environment only: the full real-robot launch |
 
 `scripts/activate.sh` sources `install/setup.bash` on every `pixi run`, so built packages are
 always on the path.
+
+### Pixi environments
+
+| Environment | Platforms | Used on | Contents |
+| --- | --- | --- | --- |
+| `default` | linux-64 | Laptop | Simulation, RViz, webcam tools. Skips `cubemars_hardware` and `cubemars_hardware_safe` when building |
+| `robot` | linux-aarch64 (Pi), linux-64 (for testing on the laptop) | Raspberry Pi | Headless `ros-base`, ros2_control, `camera_ros` with the Raspberry Pi libcamera fork, the CubeMars plugin |
+
+On the Pi every command needs `-e robot`, for example `pixi run -e robot build` and
+`pixi run -e robot robot`, because the default environment does not exist for linux-aarch64.
+The robot platforms declare glibc 2.36 (Raspberry Pi OS Bookworm). That makes the solver pick
+kernel 5.14 headers, which `cubemars_hardware` needs for `can_frame.len`; the laptop
+environment's 4.18 headers are why the default build skips it.
 
 ## Packages
 
 ```
 src/
 ├── iot_robot_description   URDF/xacro, meshes, RViz display (ament_cmake)
-├── iot_robot_mujoco        MuJoCo model inputs, ros2_control config, sim launch, twist_mux (ament_cmake)
+├── iot_robot_mujoco        MuJoCo model inputs, ros2_control config, sim launch, scan_to_range (ament_cmake)
 ├── iot_robot_perception    ball_detector, person_detector (ament_python)
-└── iot_robot_behavior      target_follower, ball_follow and person_follow launches (ament_python)
+├── iot_robot_behavior      target_follower, follow launches, shared twist_mux config (ament_python)
+├── iot_robot_web           browser controller: aiohttp server, WebSocket, MJPEG stream (ament_python)
+├── iot_robot_drivers       stm32_bridge, fake_stm32, cubemars_tool (ament_python)
+├── iot_robot_bringup       robot.launch.py, real-robot URDF wrapper, controllers, camera config (ament_cmake)
+└── external
+    ├── cubemars_hardware       upstream CubeMars ros2_control plugin (git submodule)
+    └── cubemars_hardware_safe  subclass that stops the wheels on faults, silence and shutdown
 ```
 
 `iot_robot_mujoco/urdf/iot_robot_sim.urdf.xacro` includes the description and adds the MuJoCo
-`ros2_control` hardware block. The real robot will get its own wrapper with the CubeMars hardware
-plugin, so the description package stays shared between sim and hardware.
+`ros2_control` hardware block. `iot_robot_bringup` does the same with the CubeMars plugin (or
+`mock_components` with `mock:=true`), so the description package stays shared between sim and
+hardware.
 
 ## Topics and data flow
 
@@ -108,18 +162,31 @@ MuJoCo camera ──► /camera/image_raw, /camera/camera_info, /camera/depth
                         │
                         └──► /cmd_vel/follower ──┐
 teleop_twist_keyboard ──► /cmd_vel/teleop ───────┤
+web_controller ─────────► /cmd_vel/web ──────────┤
+               └────────► /e_stop (lock) ────────┤
                                                  ▼
                                    twist_mux ──► /diff_drive_controller/cmd_vel
+
+stm32_bridge (robot) or scan_to_range (sim) ──► /ultrasonic/left, /ultrasonic/right
 ```
 
-twist_mux gives teleop priority 100 (timeout 1.0 s) over the follower's priority 10
-(timeout 0.5 s). Pressing a teleop key overrides the follower for the wheels, and control
+twist_mux gives teleop priority 100 (timeout 1.0 s) over the web page's 90 and the follower's
+10 (timeout 0.5 s). Pressing a teleop key overrides the follower for the wheels, and control
 returns to the follower about a second after the last key press. The teleop timeout is long
-because `teleop_twist_keyboard` only publishes while a key is pressed.
+because `teleop_twist_keyboard` only publishes while a key is pressed. `/e_stop`
+(`std_msgs/Bool`) is a twist_mux lock at priority 255 that never times out: while it is `true`
+nothing reaches the wheels. The same `twist_mux.yaml` (in `iot_robot_behavior`) is used by the
+sim and the real robot.
+
+The ultrasonic ranges are `sensor_msgs/Range` in metres: `+inf` means no echo within 4 m, `NaN`
+means the STM32 reports that sensor as faulty. In the sim they come from MuJoCo rangefinder rays
+on the same mounts, and the scene has a wall and a crate for them to see.
 
 Other useful topics and services:
 
 - `/person_detector/enroll`, `/person_detector/forget` (`std_srvs/srv/Trigger`)
+- `/person/status`: the person detector's status line (enrolled, following, searching)
+- `/battery_state`: pack voltage, when the firmware is built with battery sensing (robot only)
 - `/joint_states`: wheel and gizmo joint positions
 - `/diff_drive_controller/odom` and the `odom → base_footprint` TF
 - `/simulator/floating_base_state`: ground-truth robot pose from MuJoCo (sim only)
@@ -138,6 +205,8 @@ Other useful topics and services:
 | Second sim person | same mannequin, green shirt and khaki trousers, starts at (2.0, −0.9) | `mjcf/scene.xml` |
 | Follow distance | ball 0.6 m, person 1.5 m | `iot_robot_behavior/config/*.yaml` |
 | ReID thresholds | match 0.75, learn new looks above 0.85, hands up for 2.0 s | `iot_robot_behavior/config/person_follow.yaml` |
+| Ultrasonic lights | green ≥ 1.0 m, yellow 0.4–1.0 m, red < 0.4 m; forward blocked below 0.25 m | `iot_robot_web/config/web_controller.yaml` |
+| Web driving limits | 0.4 m/s, 1.5 rad/s; the robot stops 0.3 s after the browser goes quiet | same |
 
 ## Progress
 
@@ -151,7 +220,17 @@ Other useful topics and services:
       in the `odom` frame between detections, and distance accounts for the camera's tilt
 - [ ] Step 7: re-identification, so the robot remembers one specific person. Prototype verified
       in sim (service enrollment, two mannequins); gesture enrollment still to be tried on the webcam
-- [ ] Step 8: real hardware (CubeMars motors, Pi camera, IMU, STM32 ultrasonics)
+- [x] Browser controller: drive, follow modes, camera aim, E-stop and ultrasonic traffic lights,
+      tested in the sim and against the mock robot
+- [ ] Step 8: real hardware
+  - [x] Software: `robot.launch.py`, the CubeMars plugin with safe stops (tested on a virtual CAN
+        bus with fake motors), the STM32 bridge (tested against a fake board), camera config,
+        systemd service, `robot` pixi environment
+  - [x] Nucleo firmware ([iot-stm32](https://github.com/natapol2547/iot-stm32)), host-tested
+  - [x] Wiring diagrams and parts list ([docs/wiring.md](docs/wiring.md))
+  - [ ] Wire it up and run the first power-on checklist in [docs/hardware.md](docs/hardware.md)
+  - [ ] Calibrate motor directions, `pole_pairs`, wheel radius and separation on the real robot
+  - [ ] IMU (LSM9DS1)
 
 ## Perception
 
@@ -410,6 +489,20 @@ These cost real debugging time. Check here first when something similar breaks.
   the latest transform instead.
 - Catch `(KeyboardInterrupt, ExternalShutdownException)` in `main()`. Otherwise every node
   prints a traceback when a launch file is stopped.
+- **`ros2 topic pub --once` can reach one subscriber and miss another.** It sends as soon as
+  the first subscriber is discovered. For `/e_stop` use `-t 3` (three messages, one a second),
+  so both twist_mux and the web page see it.
+- A reading-based guard must treat `NaN` explicitly: `distance < stop_distance` is `False` for
+  `NaN`, so an invalid reading silently counts as "clear".
+
+### Web
+
+- **aiohttp 3.14's WebSocket reader can drop the first message after a ping/pong** when
+  per-message compression is on, which could lose a STOP. The server disables compression;
+  `iot_robot_web/test/test_websocket.py` guards the regression.
+- The page answers only to IP addresses, `localhost` and the machine's own host names (the
+  `allowed_hosts` parameter adds more). That blocks DNS rebinding, where a hostile web page
+  re-points its domain at the robot and drives it from a visitor's browser.
 
 ### Performance
 
@@ -421,20 +514,57 @@ These cost real debugging time. Check here first when something similar breaks.
 
 - `ros2 launch` started in the background from a non-interactive shell ignores Ctrl-C/SIGINT.
   Leftover simulations on the same `ROS_DOMAIN_ID` then fight over `/clock`. Start test runs
-  with `setsid` and kill the whole process group, or use a separate `ROS_DOMAIN_ID`.
+  with `set -m` at the top of the script (background jobs then keep the default SIGINT
+  handling) or with `setsid`, and use a separate `ROS_DOMAIN_ID`. A leftover web controller is
+  especially confusing: it mirrors and keeps repeating any `/e_stop true` it hears.
+- Stopping the whole process group with Ctrl-C sends SIGINT twice to every node (once from the
+  terminal, once from the launch), and some C++ nodes then report exit code -2. Signal only
+  the launch process when that matters; the systemd service does this with `KillMode=mixed`.
 
-## Notes for the real hardware (Step 8)
+## Real hardware (Step 8)
 
-- **Motors:** planned driver is
-  [cubemars_hardware](https://github.com/OpenFieldAutomation-OFA/cubemars_hardware), a
-  ros2_control SystemInterface.
-  - `pole_pairs` and `gear_ratio` need calibrating.
-  - `send_can_status` must be enabled through R-Link.
-  - Servo-mode speed is in electrical RPM.
+The full guide is [docs/hardware.md](docs/hardware.md); wiring is in
+[docs/wiring.md](docs/wiring.md). In short:
+
+```bash
+# On the Pi, once
+pixi install -e robot --locked
+pixi run -e robot build
+sudo deploy/install.sh        # udev rule for /dev/stm32, can0 at boot, iot-robot.service
+
+# Then
+pixi run -e robot can-check   # both motors answer on can0
+pixi run -e robot robot       # everything; the web page is on http://<pi>.local:8080
+```
+
+- **Motors:** [cubemars_hardware](https://github.com/OpenFieldAutomation-OFA/cubemars_hardware)
+  (submodule) wrapped by `cubemars_hardware_safe`. The wrapper stops both wheels (zero speed for
+  300 ms, then release) when the hardware is deactivated or shut down, when a motor reports a
+  fault, and when a motor sends no status for 100 ms. `robot.launch.py` sends the same stop if
+  `ros2_control_node` exits for any reason, and the systemd service runs `cubemars_tool stop`
+  after every stop. After a fault, a silent motor or the hardware E-stop, the stop is latched
+  until the robot is restarted. The motors' own CAN timeout must also be set in R-Link; it is
+  the only stop if the Pi or the CAN link dies. `send_can_status` must be enabled there too,
+  and servo-mode speed is in electrical RPM, so `pole_pairs` needs checking.
+- **E-stop:** the real robot starts with the web E-stop engaged (`start_estopped:=true`), so it
+  never drives after a restart until someone releases the stop on the page. The hardware E-stop
+  only cuts motor power, and ROS can't see it directly; see the recovery order in
+  [docs/wiring.md](docs/wiring.md#1-power-distribution).
+- **Ultrasonic sensors:** the Nucleo sends `D1:<cm>,D2:<cm>[,V:<volts>]` lines at about 15 Hz
+  over the ST-LINK USB port, and `stm32_bridge` publishes them as `/ultrasonic/left` and
+  `/ultrasonic/right`. After about 1 s of failed pings the firmware prints
+  `# warning: <side> sensor not responding` (or `echo stuck high`, `echo pulses too short`).
+  The bridge then publishes `NaN` for that side and logs a warning, and the web page greys that
+  side out and blocks forward driving until `# info: <side> sensor recovered`.
 - **Camera:** `camera_ros` (libcamera). The conda-forge libcamera `rpi_fork` build supports the
   Pi pipelines inside pixi. Use sensor mode 1640:1232 (full field of view, binned) scaled to
   640 × 480. The sensor's native 640 × 480 mode is cropped. Publish on `/camera/image_raw` and
   `/camera/camera_info` so the perception nodes work unchanged.
+- **Testing without hardware:** `pixi run fake-stm32` in one terminal and
+  `pixi run robot-mock stm32_port:=/tmp/fake_stm32` in another run the whole robot launch on a
+  laptop, web page included.
+  The CAN tests use a virtual CAN bus in a throwaway network namespace; see
+  [docs/hardware.md](docs/hardware.md#testing-without-hardware).
 - **Meshes:** the wheel STL meshes are 5.34 mm off-centre in local X. This is corrected with
   the URDF visual origin.
 - **Model format on the Pi:** start with ONNX at 320. Try NCNN if it is too slow; Ultralytics
