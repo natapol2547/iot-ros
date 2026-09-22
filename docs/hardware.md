@@ -20,6 +20,10 @@ configuration, the gizmo, the IMU, how the motors are stopped, and troubleshooti
 | LSM9DS1 IMU | Pi I2C bus 1 (header pins 1, 3, 5, 9) | `lsm9ds1_node` → `/imu/data_raw`, `/imu/mag`; `imu_filter_madgwick` → `/imu/data` |
 | 6S LiPo with XT60, main switch SW1, E-stop S1 | S1 cuts all four motors; the Pi stays on ([wiring.md](wiring.md#1-power-distribution)) | |
 
+The Raspberry Pi controls all four motors over CAN, through `ros2_control`. The Nucleo
+only reads sensors (the two ultrasonic sensors and, optionally, the battery voltage) and
+drives no motors.
+
 The CAN IDs come from `src/iot_robot_bringup/config/motors.yaml`
 ([motors.yaml](#motorsyaml)). Which ID sits on which joint is assumed until
 `can-identify` has confirmed it.
@@ -44,7 +48,7 @@ pixi run -e robot ros2 launch iot_robot_bringup robot.launch.py --show-args
 | `can_interface` | `can0` | SocketCAN interface |
 | `motors` | the package's `config/motors.yaml` | Motor CAN IDs, directions and `zero_on_start`, per joint. Pass an absolute path to use another file |
 | `stm32_port` | `/dev/stm32` | Serial port of the Nucleo |
-| `gizmo_mode` | `can` | `can`: the gizmo motors are driven over CAN (`gizmo_controller`). `fixed`: the gizmo is not driven and `stm32_bridge` reports its joints at 0. `servo`: legacy hobby servos on the Nucleo, not fitted (needs a servo build of the firmware) |
+| `gizmo_mode` | `can` | `can`: the gizmo motors are driven over CAN (`gizmo_controller`). `fixed`: the gizmo is not driven and `stm32_bridge` reports its joints at 0. No other value is accepted |
 
 `ros2 launch` accepts arguments that a launch file does not declare, without a warning.
 A misspelt argument, or one that no longer exists such as `left_can_id` or
@@ -139,28 +143,26 @@ The camera uses the Raspberry Pi fork of libcamera from conda-forge, pinned in
 
 ### STM32 sensor board
 
-Flash firmware 1.1.0 from the [iot-stm32](https://github.com/natapol2547/iot-stm32)
-repository (its README, section "Flashing"). Plug the Nucleo's ST-LINK USB port into the
-Pi. After `deploy/install.sh` it appears as `/dev/stm32`; before that it is
-`/dev/ttyACM<n>` and needs the `dialout` group. The firmware sends one line per
-measurement at about 15 Hz:
+The Nucleo only reads sensors; it drives no motors. Flash firmware 1.2.0 from the
+[iot-stm32](https://github.com/natapol2547/iot-stm32) repository (its README, section
+"Flashing"). Plug the Nucleo's ST-LINK USB port into the Pi. After `deploy/install.sh` it
+appears as `/dev/stm32`; before that it is `/dev/ttyACM<n>` and needs the `dialout`
+group. The firmware sends one line per measurement at about 15 Hz:
 
 ```text
 D1:<left cm>,D2:<right cm>[,V:<battery volts>]\r\n       # -1.0 or 0.0 means no echo
-# comment lines start with '#': after every reset the banner "# iot-stm32 1.1.0"
-# and the compiled-in features, "# servos=off battery=off" by default
+# comment lines start with '#': after every reset the banner "# iot-stm32 1.2.0"
+# and the compiled-in features, "# battery=off" by default
 # warning: <left|right> <fault>     after about 1 s of failed pings, repeated every ~10 s
 # info: <left|right> sensor recovered
 ```
 
 The `V:` field only appears in a firmware built with battery sensing
-(`APP_ENABLE_BATTERY=1`). The board also accepts `G:<yaw deg>,<pitch deg>\n` for hobby
-servos, but only a servo build (`APP_ENABLE_SERVOS=1`, banner `# servos=on`) acts on it;
-the default build drops it. `stm32_bridge` sends `G:` lines only with
-`gizmo_mode:=servo`. It publishes the distances as `sensor_msgs/Range` in metres (no echo
-is `+inf`) and the voltage as `sensor_msgs/BatteryState`, and reconnects on its own when
-the board is unplugged or reset. With `gizmo_mode:=fixed` or `servo` it also publishes the
-gizmo joint states; with `can` the joint state broadcaster does.
+(`APP_ENABLE_BATTERY=1`). The link is one-way: the Pi sends nothing to the board.
+`stm32_bridge` publishes the distances as `sensor_msgs/Range` in metres (no echo is
+`+inf`) and the voltage as `sensor_msgs/BatteryState`, and reconnects on its own when
+the board is unplugged or reset. With `gizmo_mode:=fixed` it also publishes the gizmo
+joint states; with `can` the joint state broadcaster does.
 
 A failed ping is sent as `-1.0`, the same as open space, so an unplugged sensor would
 look permanently clear. The firmware therefore reports a lasting failure with a
@@ -320,7 +322,7 @@ Edits take effect at the next start of the robot (Ctrl-C and start again, or
 `sudo systemctl restart iot-robot`), without a rebuild, because the build installs the
 file as a link. The launch checks the file first and stops with a list of every problem,
 such as a missing joint, an ID outside 1 to 254 or the same ID on two joints. With
-`gizmo_mode:=fixed` or `servo` the gizmo entries may be missing. To use another file,
+`gizmo_mode:=fixed` the gizmo entries may be missing. To use another file,
 pass `motors:=/absolute/path/motors.yaml`.
 
 ### Motor tools

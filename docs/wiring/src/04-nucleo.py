@@ -15,8 +15,8 @@ are drawn as flags that all tie to the rails on the interface perfboard; with
 the HC-SR04P pin order (VCC, TRIG, ECHO, GND) that is the only way to draw the
 harness without crossings.
 
-The servo outputs PA6/PA7 (D12/D11) are not drawn: the gizmo uses AK45-10
-motors on the CAN bus, so the legacy servo gizmo is not fitted.
+The Nucleo only reads sensors and drives no motors: the Raspberry Pi controls
+all four AK45-10 motors over CAN.
 """
 
 from pathlib import Path
@@ -324,13 +324,13 @@ def main():
     add('<rect x="1300" y="160" width="280" height="660" rx="8" fill="#fafafa" stroke="#999" '
         'stroke-width="1.2"/>')
     headings = {'HC-SR04P supply (drawn)', 'Alternative: 3.3 V supply', 'Ultrasonics',
-                'Servo pins (not fitted)'}
+                'Motors: none here'}
     notes_right = [
         'HC-SR04P supply (drawn)',
         'VCC from the +5V rail and a',
         '1k/2k divider on each ECHO.',
-        'The HC-SR04P runs on 3.0 to',
-        '5.5 V; its ECHO high equals',
+        'The HC-SR04P runs on 3.3 to',
+        '5 V; its ECHO high equals',
         'VCC, so at 5 V the Nucleo pin',
         'sees 3.33 V.',
         '',
@@ -345,8 +345,8 @@ def main():
         '3.3 V). Pins stay the same.',
         'Never keep the 2 kΩ at 3.3 V:',
         'ECHO high falls to 2.2 V,',
-        'barely above the 1.79 V',
-        'input threshold.',
+        'below the 2.31 V (0.7 x VDD)',
+        'that ST tests in production.',
         '',
         'Ultrasonics',
         'Range 2 cm to 4 m, 15° cone.',
@@ -355,13 +355,11 @@ def main():
         'Allow 60 ms or more',
         'between pings.',
         '',
-        'Servo pins (not fitted)',
-        'The firmware still drives',
-        'PA6/PA7 (D12/D11) with servo',
-        'PWM for the legacy servo',
-        'gizmo. The AK45-10 gizmo is',
-        'on the CAN bus; leave these',
-        'pins unwired.',
+        'Motors: none here',
+        'The Nucleo only reads',
+        'sensors. The Raspberry Pi',
+        'controls all four AK45-10',
+        'motors over CAN.',
     ]
     y = 186
     for line in notes_right:

@@ -18,6 +18,10 @@ The whole ROS environment is managed by [pixi](https://pixi.sh) using
 | IMU | LSM9DS1 on the Pi's I2C bus |
 | Power | 6S LiPo (24 V nominal) with an XT60 plug and a main switch; an E-stop cuts power to the motors; 5.1 V buck converter for the Pi |
 
+The Raspberry Pi controls all four motors over CAN, through `ros2_control`. The Nucleo only
+reads sensors (the ultrasonic sensors and, optionally, the battery voltage) and drives no
+motors.
+
 There is no lidar, so Nav2 is not used. Following is done with visual servoing.
 
 Everything about the real robot is in [docs/](docs/):
@@ -216,6 +220,7 @@ Other useful topics and services:
 | Gizmo yaw limits | −0.785 … 0.785 rad | URDF + `mujoco_inputs.xml` |
 | Gizmo pitch limits | −0.785 … 0 rad (negative tilts **up**) | URDF + `mujoco_inputs.xml` |
 | Camera | 640 × 480, vertical FOV 48.8°, fy ≈ 529 px, 15 Hz in sim | `mujoco_inputs.xml`, sim xacro |
+| Camera height | 0.159 m above the floor at gizmo yaw 0, pitch 0 (0.036 + 0.048 + 0.075 m up the joint chain) | `iot_robot_description/urdf/robot.urdf.xacro` |
 | Ball | 10 cm diameter, yellow, starts 1 m ahead | `mjcf/scene.xml` |
 | Sim person | 1.70 m capsule mannequin, red shirt, starts 2.5 m ahead; shoulders 1.38 m, hips 0.92 m | `mjcf/scene.xml` |
 | Second sim person | same mannequin, green shirt and khaki trousers, starts at (2.0, −0.9) | `mjcf/scene.xml` |
@@ -287,7 +292,7 @@ estimate against the depth camera. The error is below 1.5 % from 0.95 m to 3.7 m
     (`level_frame`, e.g. `base_link`), so z points up.
   - Because the torso is upright, the horizontal distance is `d = L / (tan(shoulder elevation) − tan(hip elevation))`.
   - **Why not just `Z = L / projected length`:** that assumes the torso is parallel to the image
-    plane. A camera 0.23 m off the floor, tilted up at a person, sees the torso foreshortened.
+    plane. A camera 0.159 m off the floor, tilted up at a person, sees the torso foreshortened.
     In sim the simple formula read 2.0 m for a person 1.0 m away. The tilt-aware formula read
     1.1 m. It was within 12 % at 1.5 m and within 5 % from 2 m to 4 m, including when the
     mannequin was turned 45°.
@@ -448,8 +453,9 @@ One node follows both the ball and the person; only the launch file and config d
 - If there has been no detection for `lost_timeout`, it sets gizmo yaw to 0 and pitch to
   `search_pitch`, then spins towards where the target was last seen.
   - For the ball, `search_pitch` is 0.
-  - For a person it is −0.35 rad (tilted up 20°). A level camera 0.23 m off the floor only sees
-    legs at 2.5 m, so the torso is never detected and the robot spins forever.
+  - For a person it is −0.35 rad (tilted up 20°). A level camera 0.159 m off the floor sees
+    only up to about 1.3 m at 2.5 m, below the shoulders, so the torso is never detected and
+    the robot spins forever.
 - It stops searching and stands still after `search_timeout` (10 s), and also stands still if it
   has never seen a target. Before Step 7 it spun from start-up, which would sweep the camera
   away from someone trying to enroll.
@@ -582,7 +588,7 @@ pixi run -e robot robot          # everything; the web page is on http://<pi>.lo
   start of the robot software takes the gizmo's pose at that moment as yaw 0 and pitch 0
   (camera straight ahead and level). Put the gizmo there before every start, including the
   restart after the hardware E-stop ([docs/checklist.md](docs/checklist.md)).
-  `gizmo_mode:=fixed` leaves the gizmo motors undriven.
+  `gizmo_mode` is `can` (the default) or `fixed`, which leaves the gizmo motors undriven.
 - **IMU:** `lsm9ds1_node` reads the LSM9DS1 on the Pi's I2C bus 1 and publishes
   `/imu/data_raw` and `/imu/mag`; `imu_filter_madgwick` adds the orientation on `/imu/data`.
   `robot.launch.py` starts both (`imu:=false` leaves them out); a missing sensor only logs a

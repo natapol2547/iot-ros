@@ -68,7 +68,6 @@ class TestLoad:
         config = parse(GOOD, "test.yaml")
         assert [m.can_id for m in config.in_use("can")] == [10, 11, 12, 13]
         assert [m.can_id for m in config.in_use("fixed")] == [10, 11]
-        assert [m.can_id for m in config.in_use("servo")] == [10, 11]
 
     def test_gizmo_joints_are_only_required_when_used(self):
         config = parse(WHEELS_ONLY, "test.yaml")

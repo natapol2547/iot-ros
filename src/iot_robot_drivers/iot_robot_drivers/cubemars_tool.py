@@ -438,8 +438,8 @@ def parse_args(argv):
         "check", help="interface up and every motor in motors.yaml reporting")
     check.add_argument("--ids", type=int, nargs="+",
                        help="check these CAN IDs instead of the motors.yaml ones")
-    check.add_argument("--gizmo-mode", choices=("can", "fixed", "servo"), default="can",
-                       help="as robot.launch.py: fixed and servo check the wheels only")
+    check.add_argument("--gizmo-mode", choices=("can", "fixed"), default="can",
+                       help="as robot.launch.py: fixed checks the wheels only")
     check.add_argument("--timeout", type=positive, default=1.0,
                        help="seconds to listen (default 1)")
     check.set_defaults(func=cmd_check)

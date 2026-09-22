@@ -3,15 +3,14 @@
 Replaces the first ultrasonic_node.py. Distances are published as sensor_msgs/Range in
 metres, the serial port is read on its own thread instead of polled from a timer, and the
 node reconnects when the board is unplugged or reset. The line format is described in
-stm32_protocol.
+stm32_protocol. The bridge only reads: the board drives no motors, and the Raspberry Pi
+controls all four motors over CAN.
 
 gizmo_mode says who owns the gizmo joints:
     can    the gizmo motors are in ros2_control, whose joint_state_broadcaster publishes
            their joint states; the bridge leaves the gizmo alone
     fixed  no gizmo drive; the bridge publishes constant joint states (fixed_yaw,
            fixed_pitch) so that robot_state_publisher can place the camera
-    servo  legacy hobby servos on the Nucleo: the bridge sends /gizmo_controller/commands
-           to the board and publishes the commanded angles as joint states
 """
 
 import math
@@ -29,7 +28,7 @@ from std_msgs.msg import Float64MultiArray
 from iot_robot_drivers import stm32_protocol as protocol
 
 GIZMO_JOINTS = ["gizmo_yaw_joint", "gizmo_pitch_joint"]
-GIZMO_MODES = ("can", "fixed", "servo")
+GIZMO_MODES = ("can", "fixed")
 # A line is at most ~40 bytes; anything much longer is noise, e.g. a wrong baud rate
 MAX_LINE_BYTES = 256
 
@@ -66,36 +65,27 @@ class Stm32Bridge(Node):
         self.gizmo_mode = self.declare_parameter("gizmo_mode", "fixed").value
         if self.gizmo_mode not in GIZMO_MODES:
             raise ConfigError(
-                f"gizmo_mode must be one of {', '.join(GIZMO_MODES)}, "
+                "gizmo_mode must be can (the gizmo motors are driven over CAN by "
+                "ros2_control) or fixed (the gizmo is not driven), "
                 f"got '{self.gizmo_mode}'")
         # Joint limits from iot_robot_description; negative pitch looks up
         self.yaw_limits = self.declare_parameter(
             "yaw_limits", [-0.785398, 0.785398]).value
         self.pitch_limits = self.declare_parameter(
             "pitch_limits", [-0.785398, 0.0]).value
-        # How the gizmo sits when it has no servos, and the servo pose at start-up
+        # How the gizmo sits in fixed mode
         fixed_yaw = self.declare_parameter("fixed_yaw", 0.0).value
         fixed_pitch = self.declare_parameter("fixed_pitch", 0.0).value
-        # Per-axis mapping from joint angle to servo angle, for horns mounted
-        # reversed or off-centre
-        self.yaw_sign = self.declare_parameter("yaw_sign", 1.0).value
-        self.yaw_offset_deg = self.declare_parameter(
-            "yaw_offset_deg", 0.0).value
-        self.pitch_sign = self.declare_parameter("pitch_sign", 1.0).value
-        self.pitch_offset_deg = self.declare_parameter(
-            "pitch_offset_deg", 0.0).value
-        servo_rate = self.declare_parameter("servo_rate", 20.0).value
         joint_state_rate = self.declare_parameter(
             "joint_state_rate", 20.0).value
 
         self.gizmo = self.clamp_gizmo(fixed_yaw, fixed_pitch)
         self.ignored_command_logged = False
 
-        # The reader thread owns opening and closing the port; the executor thread
-        # only writes servo commands, under the lock
+        # The reader thread owns opening and closing the port; destroy_node closes it
+        # under the lock if the reader thread has not finished
         self.serial_lock = threading.Lock()
         self.serial = None
-        self.last_gizmo_line = None
         self.outage_logged = False
         self.stopping = threading.Event()
         # Sides the firmware reported as faulty; only the reader thread uses this
@@ -109,13 +99,13 @@ class Stm32Bridge(Node):
             BatteryState, "/battery_state", 10)
         # In can mode joint_state_broadcaster publishes the gizmo joints; a second
         # publisher of the same joints would make them jump between two values
-        if self.gizmo_mode != "can":
+        if self.gizmo_mode == "fixed":
             self.joint_pub = self.create_publisher(JointState, "/joint_states", 10)
+            # Only to say once why pan/tilt commands (e.g. from target_follower) do
+            # not move the gizmo
             self.create_subscription(
                 Float64MultiArray, "/gizmo_controller/commands", self.on_gizmo_command, 10)
             self.create_timer(1.0 / joint_state_rate, self.publish_joint_states)
-        if self.gizmo_mode == "servo":
-            self.create_timer(1.0 / servo_rate, self.send_gizmo)
 
         self.get_logger().info(
             f"STM32 bridge on {self.port} at {self.baudrate} baud, "
@@ -145,7 +135,7 @@ class Stm32Bridge(Node):
         try:
             # exclusive stops a second bridge from reading half the lines
             connection = serial.Serial(
-                self.port, self.baudrate, timeout=0.2, write_timeout=0.5, exclusive=True)
+                self.port, self.baudrate, timeout=0.2, exclusive=True)
         except (serial.SerialException, OSError, ValueError) as err:
             # Log once per outage, not once per retry
             if not self.outage_logged:
@@ -160,10 +150,8 @@ class Stm32Bridge(Node):
         connection.reset_input_buffer()
         with self.serial_lock:
             self.serial = connection
-            # Resend the gizmo pose: the board may have reset while unplugged
-            self.last_gizmo_line = None
-        # The board may also have reset, which clears its fault state, and its banner
-        # was probably dropped above. It repeats a lasting fault within ~10 s
+        # The board may have reset while unplugged, which clears its fault state, and
+        # its banner was probably dropped above. It repeats a lasting fault within ~10 s
         self.faulty = dict.fromkeys(self.frames, False)
         self.outage_logged = False
         self.get_logger().info(f"Connected to STM32 on {self.port}")
@@ -286,38 +274,12 @@ class Stm32Bridge(Node):
                 protocol.clamp(pitch, *self.pitch_limits))
 
     def on_gizmo_command(self, msg):
-        if self.gizmo_mode != "servo":
-            if not self.ignored_command_logged:
-                self.get_logger().info(
-                    "Ignoring /gizmo_controller/commands: gizmo_mode is fixed")
-                self.ignored_command_logged = True
-            return
-        if len(msg.data) < 2 or not all(math.isfinite(v) for v in msg.data[:2]):
-            self.get_logger().warn(
-                f"Gizmo command needs two finite values [yaw, pitch], got {list(msg.data)}",
-                throttle_duration_sec=5.0)
-            return
-        self.gizmo = self.clamp_gizmo(msg.data[0], msg.data[1])
-
-    def send_gizmo(self):
-        yaw, pitch = self.gizmo
-        line = protocol.format_gizmo(
-            protocol.joint_to_servo_deg(yaw, self.yaw_sign, self.yaw_offset_deg),
-            protocol.joint_to_servo_deg(pitch, self.pitch_sign, self.pitch_offset_deg))
-        with self.serial_lock:
-            # Only send changes: the servos hold their last pulse width
-            if self.serial is None or line == self.last_gizmo_line:
-                return
-            try:
-                self.serial.write(line.encode("ascii"))
-                self.last_gizmo_line = line
-            except (serial.SerialException, OSError) as err:
-                # The reader thread notices the lost port and reconnects
-                self.get_logger().warn(
-                    f"Failed to send gizmo command: {err}", throttle_duration_sec=5.0)
+        if not self.ignored_command_logged:
+            self.get_logger().info(
+                "Ignoring /gizmo_controller/commands: gizmo_mode is fixed")
+            self.ignored_command_logged = True
 
     def publish_joint_states(self):
-        # In servo mode these are the commanded angles; hobby servos report no position
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.name = GIZMO_JOINTS

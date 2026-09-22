@@ -3,8 +3,8 @@ import math
 import pytest
 
 from iot_robot_drivers.stm32_protocol import (
-    Reading, SensorStatus, distance_to_range, format_gizmo, is_banner, is_comment,
-    joint_to_servo_deg, parse_gizmo, parse_line, parse_sensor_status)
+    Reading, SensorStatus, clamp, distance_to_range, is_banner, is_comment, parse_line,
+    parse_sensor_status)
 
 
 class TestParseLine:
@@ -49,8 +49,9 @@ class TestParseLine:
         assert not is_comment("D1:1.0,D2:2.0")
 
     def test_banner_detection(self):
+        assert is_banner("# iot-stm32 1.2.0\r\n")
         assert is_banner("# iot-stm32 1.0.0\r\n")
-        assert not is_banner("# servos=on battery=off\r\n")
+        assert not is_banner("# battery=off\r\n")
 
 
 class TestSensorStatus:
@@ -66,8 +67,8 @@ class TestSensorStatus:
         assert parse_sensor_status(line) == status
 
     @pytest.mark.parametrize("line", [
-        "# iot-stm32 1.0.0",
-        "# servos=on battery=off",
+        "# iot-stm32 1.2.0",
+        "# battery=off",
         "# warning: middle sensor not responding",   # unknown side
         "# warning: left",                           # no fault text
         "# info: left calibrated",                   # an info line that is not a recovery
@@ -97,23 +98,8 @@ class TestDistanceToRange:
         assert math.isnan(distance_to_range(150.0, 0.02, 4.0, faulty=True))
 
 
-class TestGizmo:
-    def test_format_rounds_to_a_tenth_of_a_degree(self):
-        assert format_gizmo(10.0, -20.04) == "G:10.0,-20.0\n"
-        assert format_gizmo(-0.04, 0.0) == "G:-0.0,0.0\n"
-
-    def test_parse_round_trips(self):
-        assert parse_gizmo(format_gizmo(12.3, -45.0)) == (12.3, -45.0)
-
-    @pytest.mark.parametrize("line", ["G:1.0", "G:a,b", "X:1,2", "G:1,2,3", "G:nan,1"])
-    def test_parse_rejects_malformed(self, line):
-        assert parse_gizmo(line) is None
-
-    def test_joint_angle_to_servo_degrees(self):
-        assert joint_to_servo_deg(math.pi / 4, 1.0, 0.0) == pytest.approx(45.0)
-        assert joint_to_servo_deg(math.pi / 4, -1.0, 0.0) == pytest.approx(-45.0)
-        assert joint_to_servo_deg(0.0, 1.0, 5.0) == pytest.approx(5.0)
-
-    def test_servo_angle_is_clamped_to_travel(self):
-        assert joint_to_servo_deg(math.pi, 1.0, 0.0) == pytest.approx(90.0)
-        assert joint_to_servo_deg(-math.pi, 1.0, 0.0) == pytest.approx(-90.0)
+def test_clamp_keeps_a_value_within_limits():
+    # The bridge clamps the fixed gizmo pose to the URDF joint limits with this
+    assert clamp(1.0, -0.785398, 0.785398) == pytest.approx(0.785398)
+    assert clamp(-1.0, -0.785398, 0.0) == pytest.approx(-0.785398)
+    assert clamp(-0.3, -0.785398, 0.0) == pytest.approx(-0.3)

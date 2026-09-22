@@ -9,8 +9,8 @@ STM32 -> Pi, about 15 Hz:  ``D1:<cm>,D2:<cm>[,V:<volts>]\\r\\n``
     ping is sent as -1.0, the same as open space:
     ``# warning: <left|right> <fault>`` after about 1 s of failed pings (repeated
     every ~10 s while it lasts), and ``# info: <left|right> sensor recovered``.
-Pi -> STM32:  ``G:<yaw_deg>,<pitch_deg>\\n``
-    Gizmo servo angles in degrees. Ignored by firmware built without servos.
+Pi -> STM32:  nothing. The board only reads sensors; the Raspberry Pi controls all four
+    motors over CAN.
 
 Everything here is pure so it can be unit tested without a serial port.
 """
@@ -136,40 +136,5 @@ def distance_to_range(cm, min_range, max_range, faulty=False):
     return max(metres, min_range)
 
 
-def format_gizmo(yaw_deg, pitch_deg):
-    """Encode a gizmo servo command. One decimal is finer than a hobby servo resolves."""
-    return f"G:{yaw_deg:.1f},{pitch_deg:.1f}\n"
-
-
-def parse_gizmo(line):
-    """Decode a ``G:<yaw>,<pitch>`` line into (yaw_deg, pitch_deg), or None if malformed.
-
-    Used by the fake STM32 and the tests; mirrors what the firmware accepts.
-    """
-    line = line.strip()
-    if not line.startswith("G:"):
-        return None
-    parts = line[2:].split(",")
-    if len(parts) != 2:
-        return None
-    try:
-        yaw, pitch = float(parts[0]), float(parts[1])
-    except ValueError:
-        return None
-    if not (math.isfinite(yaw) and math.isfinite(pitch)):
-        return None
-    return yaw, pitch
-
-
 def clamp(value, low, high):
     return min(max(value, low), high)
-
-
-def joint_to_servo_deg(angle_rad, sign, offset_deg, servo_limit_deg=90.0):
-    """Map a gizmo joint angle (rad, URDF convention) to a servo angle in degrees.
-
-    sign flips the axis when the servo horn turns the opposite way to the joint;
-    offset_deg trims the horn position. The result is clamped to the servo's travel.
-    """
-    servo = sign * math.degrees(angle_rad) + offset_deg
-    return clamp(servo, -servo_limit_deg, servo_limit_deg)

@@ -98,13 +98,16 @@ fixed in software in step 6, not here.
 
 ## 4. Flash the Nucleo
 
-- [ ] Build and flash firmware 1.1.0 from the `iot-stm32` repository: its README,
+The Nucleo only reads the ultrasonic sensors (and, optionally, the battery voltage); the
+Pi controls all four motors over CAN.
+
+- [ ] Build and flash firmware 1.2.0 from the `iot-stm32` repository: its README,
       section [Flashing](https://github.com/natapol2547/iot-stm32#flashing)
       (`~/iot-stm32/README.md` on the PC).
 - [ ] Plug the Nucleo's ST-LINK USB into the Pi: `ls -l /dev/stm32` shows a link to
       `ttyACM0` (or another number).
 - [ ] Banner: `pixi run -e robot python -m serial.tools.miniterm /dev/stm32 115200`,
-      press the black RESET button. Expect `# iot-stm32 1.1.0`, `# servos=off battery=off`,
+      press the black RESET button. Expect `# iot-stm32 1.2.0`, `# battery=off`,
       then about 15 lines per second like `D1:57.3,D2:-1.0`. Exit with Ctrl+].
 - [ ] Sensors: `pixi run -e robot bridge` and, in a second terminal,
       `pixi run -e robot ros2 topic echo /ultrasonic/left --field range`. A hand 30 cm in

@@ -39,7 +39,9 @@ for every session (power-on order, gizmo zero pose, E-stop recovery) is
   - the Camera Module v2.1 over the CSI ribbon (CAMERA connector);
   - the LSM9DS1 IMU over I2C bus 1 (header pins 1, 3, 5 and 9).
 - **Nucleo.** Reads two HC-SR04P ultrasonic sensors, and optionally the battery
-  voltage.
+  voltage. It only reads sensors and drives no motors.
+- **Motor control.** The Raspberry Pi controls all four motors (both wheels and the
+  gizmo's yaw and pitch) over CAN, through `ros2_control`.
 - **Ground.** All grounds are common. Battery negative is the single 0 V reference.
   The star point is the **0 V terminal block** (or bus bar): battery negative, both
   wheel motor returns, the gizmo return from J3, the buck IN- and the CAN adapter GND
@@ -68,7 +70,7 @@ for every session (power-on order, gizmo zero pose, E-stop recovery) is
 | Raspberry Pi Camera Module v2.1 (Sony IMX219) | 1 | Ships with a 150 mm Standard-Standard ribbon, which fits the Pi 4. |
 | LSM9DS1 IMU breakout | 1 | Accelerometer, gyroscope and magnetometer on I2C |
 | STM32 Nucleo-F401RE | 1 | Plus a USB-A to Mini-B cable. |
-| HC-SR04P ultrasonic sensor | 2 | 3.0-5.5 V version of the HC-SR04, pins VCC / TRIG / ECHO / GND. |
+| HC-SR04P ultrasonic sensor | 2 | 3.3-5 V version of the HC-SR04, pins VCC / TRIG / ECHO / GND. |
 | 6S LiPo battery | 1 | 22.2 V nominal, 25.2 V full, XT60 plug. Capacity **TBD**. |
 | 24 V to 5 V buck converter | 1 | Model **TBD**, see [Feeding 5.1 V into the Pi](#feeding-51-v-into-the-pi). |
 | Pan/tilt gizmo | 1 | Driven by two of the AK45-10 (yaw and pitch) on the CAN bus. |
@@ -525,6 +527,9 @@ the power table.
 
 ![Nucleo wiring](wiring/04-nucleo.svg)
 
+The Nucleo reads the two ultrasonic sensors and, optionally, the battery voltage. It
+drives no motors: the Raspberry Pi controls all four over CAN ([section 2](#2-can-bus)).
+
 The Nucleo is powered and talks to the Pi over one USB cable: the ST-LINK Mini-B port
 to any Pi USB-A port. Its USART2 (PA2/PA3) goes to the ST-LINK virtual COM port, and
 the same port is used for flashing over SWD. Leave the ST-LINK part attached, and
@@ -568,7 +573,6 @@ Pins to leave unwired:
 | CN5-6 (D13, PA5) | Drives LD2, the firmware's heartbeat LED |
 | CN9-1 / CN9-2 (D0 / D1, PA3 / PA2) | USART2 to the ST-LINK virtual COM port (solder bridges SB13/SB14) |
 | CN6-8 (VIN), CN10-8 (U5V) | Power inputs/outputs of the board's own supply; feeding them fights the USB supply |
-| CN5-5 / CN5-4 (D12 / D11, PA6 / PA7) | Servo PWM outputs of the legacy servo gizmo (`gizmo_mode:=servo`), only in firmware built with `APP_ENABLE_SERVOS=1`. No servos are fitted; see [Servo outputs](#servo-outputs-not-fitted). |
 
 ### Why the ECHO dividers
 
@@ -605,7 +609,7 @@ ECHO high falls to 2.2 V, below the 2.31 V (0.7 x VDD) that ST tests in producti
 
 ### Ultrasonic sensors
 
-- HC-SR04P: 3.0-5.5 V, about 15 mA, 40 kHz, 2 cm to 4 m, 15° cone [[hcsr04p]]. Allow
+- HC-SR04P: 3.3-5 V, about 15 mA, 40 kHz, 2 cm to 4 m, 15° cone [[hcsr04p]]. Allow
   60 ms or more between pings [[hcsr04]]. The two sensors must be pinged one after
   the other, not at the same time, so neither hears the other's echo. That is a
   firmware requirement, not a wiring one.
@@ -615,16 +619,6 @@ ECHO high falls to 2.2 V, below the 2.31 V (0.7 x VDD) that ST tests in producti
   `/ultrasonic/right` (`D2`).
 - The ST-LINK USB budget is about 300 mA for the board and its 5V pin [[um1724]].
   Two sensors take about 30 mA.
-
-### Servo outputs (not fitted)
-
-The gizmo is driven by two AK45-10 motors on the CAN bus (`gizmo_mode:=can`, the
-default). The firmware generates servo PWM on PA6/PA7 for the legacy
-`gizmo_mode:=servo` only when built with `APP_ENABLE_SERVOS=1`; the default build
-(banner `# servos=off`) leaves those pins alone. With no servos fitted, leave them
-unwired. If servos ever come back, rebuild the firmware with that option, power the
-servos from their own BEC after the E-stop, never from the Nucleo 5V pin, and join the
-BEC's OUT- to the Nucleo GND.
 
 ## 4. Camera ribbon
 

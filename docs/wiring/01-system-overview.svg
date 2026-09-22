@@ -152,7 +152,7 @@
   <rect class="box cpu" x="430" y="540" width="340" height="170" rx="10"/>
   <text x="600" y="574" class="h" text-anchor="middle">Raspberry Pi 4</text>
   <text x="600" y="598" class="t" text-anchor="middle">ROS 2 Jazzy</text>
-  <text x="600" y="620" class="t" text-anchor="middle">CAN: can0 via usb2can</text>
+  <text x="600" y="620" class="t" text-anchor="middle">CAN: all 4 motors, can0 via usb2can</text>
   <text x="600" y="642" class="t" text-anchor="middle">STM32: /dev/stm32 (ttyACM)</text>
   <text x="600" y="664" class="t" text-anchor="middle">IMU: I2C bus 1 (header pins 1-9)</text>
   <text x="600" y="686" class="t" text-anchor="middle">camera: CAMERA connector</text>
@@ -172,6 +172,7 @@
   <text x="1185" y="618" class="t" text-anchor="middle">USB VCP, 115200 8N1</text>
   <text x="1185" y="640" class="t" text-anchor="middle">D1/D2 lines at ~15 Hz</text>
   <text x="1185" y="662" class="t" text-anchor="middle">5 V to sensors</text>
+  <text x="1185" y="684" class="s" text-anchor="middle">reads sensors only, no motors</text>
 
   <rect class="box sen" x="1370" y="550" width="200" height="70" rx="8"/>
   <text x="1470" y="574" class="h" text-anchor="middle">HC-SR04P LEFT</text>

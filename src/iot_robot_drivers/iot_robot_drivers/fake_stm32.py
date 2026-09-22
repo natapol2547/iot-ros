@@ -1,10 +1,13 @@
 """Pretend to be the Nucleo sensor board on a pseudo-terminal, for testing stm32_bridge.
 
-Streams D1/D2 lines like the firmware, prints every G: command it receives, and links
-the pty to a stable path so the bridge can be pointed at it:
+Streams D1/D2 lines like the firmware, and links the pty to a stable path so the bridge
+can be pointed at it:
 
     ros2 run iot_robot_drivers fake_stm32 --battery
     ros2 run iot_robot_drivers stm32_bridge --ros-args -p port:=/tmp/fake_stm32
+
+The board accepts no commands. The fake prints every line it receives as
+``received: '<line>'``, so the tests can check that the bridge sends nothing.
 """
 
 import argparse
@@ -16,9 +19,7 @@ import sys
 import time
 import tty
 
-from iot_robot_drivers.stm32_protocol import parse_gizmo
-
-BANNER = "# iot-stm32 1.0.0 (fake)\r\n"
+BANNER = "# iot-stm32 1.2.0 (fake)\r\n"
 # The firmware's defaults: warn after this many failed pings in a row (~1 s), then
 # repeat every FAULT_REPEAT_PINGS (~10 s). Each sensor is pinged once per line
 FAULT_WARN_PINGS = 15
@@ -110,12 +111,7 @@ def main(argv=None):
                 while b"\n" in received:
                     raw, received = received.split(b"\n", 1)
                     line = raw.decode("ascii", errors="replace").strip()
-                    command = parse_gizmo(line)
-                    if command is None:
-                        print(f"ignored: {line!r}", flush=True)
-                    else:
-                        print(f"{line} -> yaw {command[0]:.1f} deg, "
-                              f"pitch {command[1]:.1f} deg", flush=True)
+                    print(f"received: {line!r}", flush=True)
 
             now = time.monotonic()
             if now >= next_send:

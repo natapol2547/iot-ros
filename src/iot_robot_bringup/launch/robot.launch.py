@@ -195,8 +195,8 @@ def launch_setup(context):
     # xacro needs an absolute path; a relative one is taken from the launch's directory
     motors_path = os.path.abspath(os.path.expanduser(arg["motors"]))
     motors = load_motors(motors_path, gizmo_mode)
-    # The motors robot.launch.py commands, checks and stops. In gizmo_mode fixed or servo
-    # the gizmo motors may still be powered on the bus, but nothing drives them
+    # The motors robot.launch.py commands, checks and stops. In gizmo_mode fixed the
+    # gizmo motors may still be powered on the bus, but nothing drives them
     in_use = motors.in_use(gizmo_mode)
     can_ids = [motor.can_id for motor in in_use]
 
@@ -265,8 +265,9 @@ def launch_setup(context):
             remappings=[("cmd_vel_out", "/diff_drive_controller/cmd_vel")],
         ),
         # Ultrasonics and battery voltage, plus the gizmo joint states in gizmo_mode
-        # fixed and servo. The bridge reconnects by itself, so it runs even when the
-        # board is unplugged
+        # fixed. The Nucleo only reads sensors; every motor is driven from here over
+        # CAN. The bridge reconnects by itself, so it runs even when the board is
+        # unplugged
         Node(
             package="iot_robot_drivers",
             executable="stm32_bridge",
@@ -333,9 +334,8 @@ def generate_launch_description():
             "stm32_port", default_value="/dev/stm32",
             description="Serial port of the Nucleo sensor board (udev symlink)"),
         DeclareLaunchArgument(
-            "gizmo_mode", default_value="can", choices=["can", "fixed", "servo"],
+            "gizmo_mode", default_value="can", choices=["can", "fixed"],
             description="can: the gizmo motors are driven over CAN (gizmo_controller); "
-                        "fixed: gizmo not driven, constant joint states from stm32_bridge; "
-                        "servo: legacy hobby servos on the Nucleo (not fitted)"),
+                        "fixed: gizmo not driven, constant joint states from stm32_bridge"),
         OpaqueFunction(function=launch_setup),
     ])

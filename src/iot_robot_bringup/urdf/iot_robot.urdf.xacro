@@ -8,8 +8,8 @@
          the only place they are set; see the comments in it -->
     <xacro:arg name="motors" default="$(find iot_robot_bringup)/config/motors.yaml" />
     <!-- can: the gizmo motors are driven over CAN by GizmoSystem (gizmo_controller).
-         fixed, servo: the gizmo joints are not in ros2_control; stm32_bridge publishes
-         their joint states -->
+         fixed: the gizmo joints are not in ros2_control; stm32_bridge publishes
+         constant joint states for them -->
     <xacro:arg name="gizmo_mode" default="can" />
 
     <!-- The physical robot: links, joints (with their limits), meshes, camera and
@@ -18,7 +18,7 @@
 
     <xacro:property name="gizmo_mode" value="$(arg gizmo_mode)" />
     <xacro:property name="gizmo_can" lazy_eval="false"
-        value="${gizmo_mode == 'can' if gizmo_mode in ['can', 'fixed', 'servo'] else xacro.fatal('gizmo_mode must be can, fixed or servo, got: ' + str(gizmo_mode))}" />
+        value="${gizmo_mode == 'can' if gizmo_mode in ['can', 'fixed'] else xacro.fatal('gizmo_mode must be can or fixed, got: ' + str(gizmo_mode))}" />
 
     <!-- motors.yaml, read only on first use, i.e. only without mock:=true -->
     <xacro:property name="motors_file" value="$(arg motors)" />

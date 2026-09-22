@@ -20,16 +20,21 @@ from iot_robot_drivers.stm32_bridge import Stm32Bridge  # noqa: E402
 PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def package_env():
+    """Return the environment with this source tree first on PYTHONPATH, for subprocesses."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = PACKAGE_ROOT + os.pathsep + env.get("PYTHONPATH", "")
+    return env
+
+
 class FakeStm32:
-    """fake_stm32 in a subprocess, collecting the G: commands it prints."""
+    """fake_stm32 in a subprocess, collecting the lines it receives from the bridge."""
 
     def __init__(self, link, *args):
-        env = dict(os.environ)
-        env["PYTHONPATH"] = PACKAGE_ROOT + os.pathsep + env.get("PYTHONPATH", "")
         self.process = subprocess.Popen(
             [sys.executable, "-u", "-m", "iot_robot_drivers.fake_stm32",
              "--link", link, "--battery", *args],
-            stdout=subprocess.PIPE, text=True, env=env)
+            stdout=subprocess.PIPE, text=True, env=package_env())
         self.lines = []
         threading.Thread(target=self.collect, daemon=True).start()
         wait_for(lambda: os.path.islink(link), 5.0, "fake_stm32 did not create its link")
@@ -38,8 +43,9 @@ class FakeStm32:
         for line in self.process.stdout:
             self.lines.append(line.strip())
 
-    def commands(self):
-        return [line.split()[0] for line in self.lines if line.startswith("G:")]
+    def received(self):
+        """Lines the bridge wrote to the board, which accepts no commands."""
+        return [line for line in self.lines if line.startswith("received:")]
 
     def stop(self):
         self.process.terminate()
@@ -66,7 +72,7 @@ def fake_args():
 @pytest.fixture
 def gizmo_mode():
     """The bridge's gizmo_mode; a test overrides this with pytest.mark.parametrize."""
-    return "servo"
+    return "fixed"
 
 
 @pytest.fixture
@@ -93,16 +99,14 @@ def ros(tmp_path, fake_args, gizmo_mode):
     fake.stop()
 
 
-def test_bridge_publishes_ranges_battery_and_drives_servos(ros):
+def test_bridge_publishes_ranges_and_battery(ros):
     probe, spin, fake = ros["probe"], ros["spin"], ros["fake"]
     ranges = {"left": [], "right": []}
-    batteries, joints = [], []
+    batteries = []
     for side in ranges:
         probe.create_subscription(
             Range, f"/ultrasonic/{side}", lambda msg, side=side: ranges[side].append(msg), 10)
     probe.create_subscription(BatteryState, "/battery_state", batteries.append, 10)
-    probe.create_subscription(JointState, "/joint_states", joints.append, 10)
-    commands = probe.create_publisher(Float64MultiArray, "/gizmo_controller/commands", 10)
 
     # The fake drops the right echo for 0.5 s every 3 s
     wait_for(lambda: any(math.isinf(m.range) for m in ranges["right"])
@@ -119,26 +123,8 @@ def test_bridge_publishes_ranges_battery_and_drives_servos(ros):
     assert ranges["right"][-1].header.frame_id == "ultrasonic_right_link"
     assert 21.0 <= batteries[-1].voltage <= 25.0
 
-    # Start-up pose is sent once on connect
-    wait_for(lambda: "G:0.0,0.0" in fake.commands(), 5.0, "start-up pose not sent", spin)
-
-    commands.publish(Float64MultiArray(data=[0.5, -0.3]))
-    wait_for(lambda: "G:28.6,-17.2" in fake.commands(), 5.0, "servo command not sent", spin)
-
-    # Out-of-range commands are clamped to the URDF limits (pitch cannot look down)
-    commands.publish(Float64MultiArray(data=[2.0, 1.0]))
-    wait_for(lambda: "G:45.0,0.0" in fake.commands(), 5.0, "clamped command not sent", spin)
-    wait_for(lambda: joints and joints[-1].position[0] == pytest.approx(0.785398), 5.0,
-             "joint states do not follow the command", spin)
-    assert list(joints[-1].name) == ["gizmo_yaw_joint", "gizmo_pitch_joint"]
-    assert joints[-1].position[1] == pytest.approx(0.0)
-
-    # Unchanged targets are not resent
-    sent = len(fake.commands())
-    end = time.monotonic() + 0.5
-    while time.monotonic() < end:
-        spin()
-    assert len(fake.commands()) == sent
+    # The board only reads sensors: the bridge never writes to it
+    assert fake.received() == []
 
 
 def test_bridge_reconnects_after_the_board_disappears(ros):
@@ -156,9 +142,7 @@ def test_bridge_reconnects_after_the_board_disappears(ros):
     replacement = FakeStm32(link)
     try:
         wait_for(lambda: len(left) >= 3, 10.0, "bridge did not reconnect", spin)
-        # The pose is resent because the board may have reset
-        wait_for(lambda: "G:0.0,0.0" in replacement.commands(), 5.0,
-                 "pose not resent after reconnect", spin)
+        assert replacement.received() == []
     finally:
         replacement.stop()
 
@@ -185,7 +169,7 @@ def test_reported_sensor_fault_publishes_nan_until_recovery(ros):
 
     # So does a reset of the board, announced by its banner
     bridge.handle_line("# warning: left sensor not responding\r\n")
-    bridge.handle_line("# iot-stm32 1.0.0\r\n")
+    bridge.handle_line("# iot-stm32 1.2.0\r\n")
     ranges["left"].clear()
     wait_for(lambda: len(ranges["left"]) >= 3, 5.0, "no readings after the banner", spin)
     assert all(math.isinf(m.range) for m in ranges["left"])
@@ -212,7 +196,7 @@ def test_can_mode_leaves_the_gizmo_to_ros2_control(ros):
     commands.publish(Float64MultiArray(data=[0.5, -0.3]))
     spin_for(spin, 0.5)
     assert joints == []
-    assert fake.commands() == []
+    assert fake.received() == []
 
 
 @pytest.mark.parametrize("gizmo_mode", ["fixed"])
@@ -227,4 +211,17 @@ def test_fixed_mode_publishes_a_constant_pose_and_ignores_commands(ros):
     spin_for(spin, 0.5)
     assert list(joints[-1].name) == ["gizmo_yaw_joint", "gizmo_pitch_joint"]
     assert list(joints[-1].position) == [0.0, 0.0]
-    assert fake.commands() == []
+    assert fake.received() == []
+
+
+def test_gizmo_mode_servo_is_rejected(tmp_path):
+    # The Nucleo drives no motors, so there is no mode in which the bridge commands the
+    # gizmo; the node must refuse to start rather than run in some other mode
+    result = subprocess.run(
+        [sys.executable, "-m", "iot_robot_drivers.stm32_bridge", "--ros-args",
+         "-p", "gizmo_mode:=servo", "-p", f"port:={tmp_path / 'stm32'}"],
+        capture_output=True, text=True, timeout=30.0, env=package_env())
+    output = result.stdout + result.stderr
+    assert result.returncode == 1, output
+    assert "gizmo_mode must be can" in output
+    assert "or fixed (the gizmo is not driven), got 'servo'" in output

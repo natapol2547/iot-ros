@@ -63,7 +63,7 @@ Launch arguments for the service go in `IOT_ROBOT_ARGS` in `/etc/default/iot-rob
 separated by spaces. Restart the service after editing it. For example:
 
 ```bash
-IOT_ROBOT_ARGS=gizmo_mode:=fixed                      # gizmo motors not driven
+IOT_ROBOT_ARGS=gizmo_mode:=fixed                      # gizmo motors not driven (default: can)
 IOT_ROBOT_ARGS=camera:=false web:=false
 IOT_ROBOT_ARGS=motors:=/home/pi/motors.yaml           # another motor file, absolute path
 ```

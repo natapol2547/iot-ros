@@ -311,8 +311,8 @@
 <text x="1315" y="186" class="ph">HC-SR04P supply (drawn)</text>
 <text x="1315" y="208" class="s">VCC from the +5V rail and a</text>
 <text x="1315" y="225" class="s">1k/2k divider on each ECHO.</text>
-<text x="1315" y="242" class="s">The HC-SR04P runs on 3.0 to</text>
-<text x="1315" y="259" class="s">5.5 V; its ECHO high equals</text>
+<text x="1315" y="242" class="s">The HC-SR04P runs on 3.3 to</text>
+<text x="1315" y="259" class="s">5 V; its ECHO high equals</text>
 <text x="1315" y="276" class="s">VCC, so at 5 V the Nucleo pin</text>
 <text x="1315" y="293" class="s">sees 3.33 V.</text>
 <text x="1315" y="310" class="s"></text>
@@ -327,8 +327,8 @@
 <text x="1315" y="468" class="s">3.3 V). Pins stay the same.</text>
 <text x="1315" y="485" class="s">Never keep the 2 kΩ at 3.3 V:</text>
 <text x="1315" y="502" class="s">ECHO high falls to 2.2 V,</text>
-<text x="1315" y="519" class="s">barely above the 1.79 V</text>
-<text x="1315" y="536" class="s">input threshold.</text>
+<text x="1315" y="519" class="s">below the 2.31 V (0.7 x VDD)</text>
+<text x="1315" y="536" class="s">that ST tests in production.</text>
 <text x="1315" y="553" class="s"></text>
 <text x="1315" y="570" class="ph">Ultrasonics</text>
 <text x="1315" y="592" class="s">Range 2 cm to 4 m, 15° cone.</text>
@@ -337,13 +337,11 @@
 <text x="1315" y="643" class="s">Allow 60 ms or more</text>
 <text x="1315" y="660" class="s">between pings.</text>
 <text x="1315" y="677" class="s"></text>
-<text x="1315" y="694" class="ph">Servo pins (not fitted)</text>
-<text x="1315" y="716" class="s">The firmware still drives</text>
-<text x="1315" y="733" class="s">PA6/PA7 (D12/D11) with servo</text>
-<text x="1315" y="750" class="s">PWM for the legacy servo</text>
-<text x="1315" y="767" class="s">gizmo. The AK45-10 gizmo is</text>
-<text x="1315" y="784" class="s">on the CAN bus; leave these</text>
-<text x="1315" y="801" class="s">pins unwired.</text>
+<text x="1315" y="694" class="ph">Motors: none here</text>
+<text x="1315" y="716" class="s">The Nucleo only reads</text>
+<text x="1315" y="733" class="s">sensors. The Raspberry Pi</text>
+<text x="1315" y="750" class="s">controls all four AK45-10</text>
+<text x="1315" y="767" class="s">motors over CAN.</text>
 <text x="30" y="1055" class="s b">Wires:</text>
 <path d="M90 1050 H126" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round"/>
 <text x="134" y="1055" class="s">+5V</text>

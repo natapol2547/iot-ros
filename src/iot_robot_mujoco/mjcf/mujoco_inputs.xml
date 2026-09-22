@@ -20,7 +20,7 @@
                 forcerange="-7 7" />
             <velocity name="wheel_joint_right" joint="wheel_joint_right" kv="1.0" ctrlrange="-19 19"
                 forcerange="-7 7" />
-            <!-- Placeholder gains until the real pan/tilt servos are chosen -->
+            <!-- Placeholder gains, not yet matched to the AK45-10 gizmo motors -->
             <position name="gizmo_yaw_joint" joint="gizmo_yaw_joint" kp="5" dampratio="1"
                 ctrlrange="-0.785398 0.785398" />
             <position name="gizmo_pitch_joint" joint="gizmo_pitch_joint" kp="5" dampratio="1"
