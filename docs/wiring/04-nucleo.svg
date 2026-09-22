@@ -33,17 +33,6 @@
 <path d="M1190 770 H1250" fill="none" stroke="#333" stroke-width="2.4" stroke-linejoin="round"/>
 <path d="M1250 745 V900" fill="none" stroke="#212121" stroke-width="3.2" stroke-linejoin="round"/>
 <path d="M1070 876 V900" fill="none" stroke="#d32f2f" stroke-width="3.2" stroke-linejoin="round"/>
-<path d="M986 418 H1100 V330" fill="none" stroke="#212121" stroke-width="3.2" stroke-linejoin="round"/>
-<path d="M1100 330 H1470 V176" fill="none" stroke="#6d4c41" stroke-width="4" stroke-linejoin="round"/>
-<path d="M1180 360 H1540 V176" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round"/>
-<path d="M986 470 H1180 V390" fill="none" stroke="#ef6c00" stroke-width="3.2" stroke-linejoin="round"/>
-<path d="M986 496 H1340 V390" fill="none" stroke="#ef6c00" stroke-width="3.2" stroke-linejoin="round"/>
-<path d="M1174 266 V318" fill="none" stroke="#ef6c00" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M1180 266 V318" fill="none" stroke="#d32f2f" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M1186 266 V318" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M1334 266 V318" fill="none" stroke="#ef6c00" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M1340 266 V318" fill="none" stroke="#d32f2f" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M1346 266 V318" fill="none" stroke="#6d4c41" stroke-width="2.2" stroke-linejoin="round"/>
 <rect x="660" y="84" width="280" height="46" rx="6" fill="#e8f5e9" stroke="#333" stroke-width="1.6"/>
 <text x="800" y="103" class="s b" text-anchor="middle">Raspberry Pi, any USB-A port</text>
 <text x="800" y="121" class="s" text-anchor="middle">USB serial /dev/stm32 (ttyACM), 115200 8N1</text>
@@ -149,28 +138,25 @@
 <text x="948" y="397" class="t dim" text-anchor="end">AVDD</text>
 <text x="898" y="397" class="t dim" text-anchor="end"></text>
 <text x="850" y="397" class="xs" text-anchor="end">CN10-7</text>
-<rect x="800" y="407" width="170" height="22" rx="3" fill="#212121" fill-opacity="0.16"/>
-<rect x="974" y="412" width="12" height="12" fill="#212121" stroke="#333" stroke-width="1.5"/>
+<rect x="974" y="412" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="966" y="423" class="xs" text-anchor="end">7</text>
-<text x="948" y="423" class="t b" text-anchor="end">GND</text>
-<text x="898" y="423" class="t" text-anchor="end"></text>
+<text x="948" y="423" class="t dim" text-anchor="end">GND</text>
+<text x="898" y="423" class="t dim" text-anchor="end"></text>
 <text x="850" y="423" class="xs" text-anchor="end">CN10-9</text>
 <rect x="974" y="438" width="12" height="12" fill="#bdbdbd" stroke="#333" stroke-width="1.5"/>
 <text x="966" y="449" class="xs" text-anchor="end">6</text>
 <text x="948" y="449" class="t dim i" text-anchor="end">D13</text>
 <text x="898" y="449" class="t dim i" text-anchor="end">PA5</text>
 <text x="850" y="449" class="xs" text-anchor="end">CN10-11</text>
-<rect x="800" y="459" width="170" height="22" rx="3" fill="#ef6c00" fill-opacity="0.16"/>
-<rect x="974" y="464" width="12" height="12" fill="#ef6c00" stroke="#333" stroke-width="1.5"/>
+<rect x="974" y="464" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="966" y="475" class="xs" text-anchor="end">5</text>
-<text x="948" y="475" class="t b" text-anchor="end">D12</text>
-<text x="898" y="475" class="t" text-anchor="end">PA6</text>
+<text x="948" y="475" class="t dim" text-anchor="end">D12</text>
+<text x="898" y="475" class="t dim" text-anchor="end">PA6</text>
 <text x="850" y="475" class="xs" text-anchor="end">CN10-13</text>
-<rect x="800" y="485" width="170" height="22" rx="3" fill="#ef6c00" fill-opacity="0.16"/>
-<rect x="974" y="490" width="12" height="12" fill="#ef6c00" stroke="#333" stroke-width="1.5"/>
+<rect x="974" y="490" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="966" y="501" class="xs" text-anchor="end">4</text>
-<text x="948" y="501" class="t b" text-anchor="end">D11</text>
-<text x="898" y="501" class="t" text-anchor="end">PA7</text>
+<text x="948" y="501" class="t dim" text-anchor="end">D11</text>
+<text x="898" y="501" class="t dim" text-anchor="end">PA7</text>
 <text x="850" y="501" class="xs" text-anchor="end">CN10-15</text>
 <rect x="974" y="516" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="966" y="527" class="xs" text-anchor="end">3</text>
@@ -259,7 +245,7 @@
 <text x="450" y="922" class="xs b" text-anchor="middle">ECHO</text>
 <rect x="504" y="894" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="510" y="922" class="xs b" text-anchor="middle">GND</text>
-<text x="420" y="950" class="h" text-anchor="middle">HC-SR04 LEFT</text>
+<text x="420" y="950" class="h" text-anchor="middle">HC-SR04P LEFT</text>
 <text x="420" y="970" class="s" text-anchor="middle">front-left, yaw +45°</text>
 <text x="420" y="988" class="s" text-anchor="middle">/ultrasonic/left (D1 field)</text>
 <rect x="580" y="880" width="400" height="130" rx="8" fill="#ffffff" stroke="#333" stroke-width="1.6" stroke-dasharray="7 5"/>
@@ -298,34 +284,9 @@
 <text x="1190" y="922" class="xs b" text-anchor="middle">ECHO</text>
 <rect x="1244" y="894" width="12" height="12" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
 <text x="1250" y="922" class="xs b" text-anchor="middle">GND</text>
-<text x="1160" y="950" class="h" text-anchor="middle">HC-SR04 RIGHT</text>
+<text x="1160" y="950" class="h" text-anchor="middle">HC-SR04P RIGHT</text>
 <text x="1160" y="970" class="s" text-anchor="middle">front-right, yaw -45°</text>
 <text x="1160" y="988" class="s" text-anchor="middle">/ultrasonic/right (D2 field)</text>
-<rect x="1430" y="92" width="150" height="84" rx="8" fill="#ffffff" stroke="#333" stroke-width="1.6" stroke-dasharray="7 5"/>
-<text x="1505" y="114" class="s b" text-anchor="middle">Servo BEC (opt.)</text>
-<text x="1505" y="132" class="xs" text-anchor="middle">in: 24 V motor bus</text>
-<text x="1505" y="148" class="xs" text-anchor="middle">out: 5-6 V, 3 A</text>
-<text x="1462" y="170" class="s b" text-anchor="middle">-</text>
-<text x="1532" y="170" class="s b" text-anchor="middle">+</text>
-<rect x="1110" y="196" width="140" height="70" rx="8" fill="#ffffff" stroke="#333" stroke-width="1.6" stroke-dasharray="7 5"/>
-<text x="1180" y="216" class="s b" text-anchor="middle">YAW servo</text>
-<text x="1180" y="234" class="xs" text-anchor="middle">PA6 TIM3_CH1</text>
-<text x="1180" y="250" class="xs" text-anchor="middle">50 Hz, 1500 µs centre</text>
-<rect x="1170" y="318" width="20" height="84" rx="3" fill="#424242"/>
-<circle cx="1180" cy="330" r="5" fill="#6d4c41" stroke="#ffffff" stroke-width="1.5"/>
-<circle cx="1180" cy="360" r="5" fill="#d32f2f" stroke="#ffffff" stroke-width="1.5"/>
-<circle cx="1180" cy="390" r="5" fill="#ef6c00" stroke="#ffffff" stroke-width="1.5"/>
-<rect x="1270" y="196" width="140" height="70" rx="8" fill="#ffffff" stroke="#333" stroke-width="1.6" stroke-dasharray="7 5"/>
-<text x="1340" y="216" class="s b" text-anchor="middle">PITCH servo</text>
-<text x="1340" y="234" class="xs" text-anchor="middle">PA7 TIM3_CH2</text>
-<text x="1340" y="250" class="xs" text-anchor="middle">50 Hz, 1500 µs centre</text>
-<rect x="1330" y="318" width="20" height="84" rx="3" fill="#424242"/>
-<circle cx="1340" cy="330" r="5" fill="#6d4c41" stroke="#ffffff" stroke-width="1.5"/>
-<circle cx="1340" cy="360" r="5" fill="#d32f2f" stroke="#ffffff" stroke-width="1.5"/>
-<circle cx="1340" cy="390" r="5" fill="#ef6c00" stroke="#ffffff" stroke-width="1.5"/>
-<text x="1356" y="422" class="xs">servo plug, top to bottom:</text>
-<text x="1356" y="438" class="xs">- brown, + red, S orange</text>
-<circle cx="1100" cy="330" r="4.5" fill="#212121"/>
 <rect x="30" y="640" width="250" height="370" rx="8" fill="#fafafa" stroke="#999" stroke-width="1.2"/>
 <text x="45" y="666" class="ph">Build notes</text>
 <text x="45" y="692" class="s">Mount the rails, both</text>
@@ -333,44 +294,56 @@
 <text x="45" y="726" class="s">small perfboard next to</text>
 <text x="45" y="743" class="s">the Nucleo.</text>
 <text x="45" y="760" class="s"></text>
-<text x="45" y="777" class="s">ECHO swings 0-5 V. Divider</text>
-<text x="45" y="794" class="s">order: Nucleo pin, node</text>
-<text x="45" y="811" class="s">with 2 kΩ to GND, 1 kΩ,</text>
-<text x="45" y="828" class="s">ECHO. The pin sees 3.33 V.</text>
-<text x="45" y="845" class="s">These pins are 5 V tolerant</text>
-<text x="45" y="862" class="s">in digital mode; the divider</text>
-<text x="45" y="879" class="s">keeps margin anyway.</text>
+<text x="45" y="777" class="s">ECHO high equals VCC, 5 V</text>
+<text x="45" y="794" class="s">here. Divider order: Nucleo</text>
+<text x="45" y="811" class="s">pin, node with 2 kΩ to GND,</text>
+<text x="45" y="828" class="s">1 kΩ, ECHO. The pin sees</text>
+<text x="45" y="845" class="s">3.33 V. These pins are 5 V</text>
+<text x="45" y="862" class="s">tolerant in digital mode;</text>
+<text x="45" y="879" class="s">the divider keeps margin.</text>
 <text x="45" y="896" class="s"></text>
 <text x="45" y="913" class="s">TRIG needs no shifter:</text>
 <text x="45" y="930" class="s">3.3 V is a valid TTL high.</text>
 <text x="45" y="947" class="s"></text>
 <text x="45" y="964" class="s">ST-LINK USB budget: about</text>
 <text x="45" y="981" class="s">300 mA incl. the 5V pin.</text>
-<rect x="1300" y="520" width="280" height="490" rx="8" fill="#fafafa" stroke="#999" stroke-width="1.2"/>
-<text x="1315" y="546" class="ph">Servos (optional)</text>
-<text x="1315" y="572" class="s">Gizmo actuator is TBD; this</text>
-<text x="1315" y="589" class="s">assumes two hobby servos.</text>
-<text x="1315" y="606" class="s"></text>
-<text x="1315" y="623" class="s">Servo power comes from the</text>
-<text x="1315" y="640" class="s">BEC only. Never from the</text>
-<text x="1315" y="657" class="s">Nucleo 5V pin: a stalled</text>
-<text x="1315" y="674" class="s">servo draws amps.</text>
-<text x="1315" y="691" class="s"></text>
-<text x="1315" y="708" class="s">Join BEC - to Nucleo GND</text>
-<text x="1315" y="725" class="s">(CN5-7): the PWM signal</text>
-<text x="1315" y="742" class="s">needs a common ground.</text>
-<text x="1315" y="759" class="s"></text>
-<text x="1315" y="776" class="s">PWM: 50 Hz, 1500 µs = 0°,</text>
-<text x="1315" y="793" class="s">±1000 µs = ±90°, firmware</text>
-<text x="1315" y="810" class="s">clamps 500-2500 µs.</text>
-<text x="1315" y="827" class="s"></text>
-<text x="1315" y="844" class="ph">Ultrasonics</text>
-<text x="1315" y="861" class="s"></text>
-<text x="1315" y="878" class="s">Range 2 cm - 4 m, 15° cone.</text>
-<text x="1315" y="895" class="s">Aim the two sensors so the</text>
-<text x="1315" y="912" class="s">cones do not overlap.</text>
-<text x="1315" y="929" class="s">Allow 60 ms or more</text>
-<text x="1315" y="946" class="s">between pings.</text>
+<rect x="1300" y="160" width="280" height="660" rx="8" fill="#fafafa" stroke="#999" stroke-width="1.2"/>
+<text x="1315" y="186" class="ph">HC-SR04P supply (drawn)</text>
+<text x="1315" y="208" class="s">VCC from the +5V rail and a</text>
+<text x="1315" y="225" class="s">1k/2k divider on each ECHO.</text>
+<text x="1315" y="242" class="s">The HC-SR04P runs on 3.0 to</text>
+<text x="1315" y="259" class="s">5.5 V; its ECHO high equals</text>
+<text x="1315" y="276" class="s">VCC, so at 5 V the Nucleo pin</text>
+<text x="1315" y="293" class="s">sees 3.33 V.</text>
+<text x="1315" y="310" class="s"></text>
+<text x="1315" y="327" class="ph">Alternative: 3.3 V supply</text>
+<text x="1315" y="349" class="s">VCC from +3V3 (CN6-4), ECHO</text>
+<text x="1315" y="366" class="s">straight to the pin: remove</text>
+<text x="1315" y="383" class="s">both 2 kΩ; each 1 kΩ may</text>
+<text x="1315" y="400" class="s">stay as series protection.</text>
+<text x="1315" y="417" class="s">No divider to build, but the</text>
+<text x="1315" y="434" class="s">range drops a little (sellers</text>
+<text x="1315" y="451" class="s">quote 4.5 m at 5 V, 4.0 m at</text>
+<text x="1315" y="468" class="s">3.3 V). Pins stay the same.</text>
+<text x="1315" y="485" class="s">Never keep the 2 kΩ at 3.3 V:</text>
+<text x="1315" y="502" class="s">ECHO high falls to 2.2 V,</text>
+<text x="1315" y="519" class="s">barely above the 1.79 V</text>
+<text x="1315" y="536" class="s">input threshold.</text>
+<text x="1315" y="553" class="s"></text>
+<text x="1315" y="570" class="ph">Ultrasonics</text>
+<text x="1315" y="592" class="s">Range 2 cm to 4 m, 15° cone.</text>
+<text x="1315" y="609" class="s">Aim the two sensors so the</text>
+<text x="1315" y="626" class="s">cones do not overlap.</text>
+<text x="1315" y="643" class="s">Allow 60 ms or more</text>
+<text x="1315" y="660" class="s">between pings.</text>
+<text x="1315" y="677" class="s"></text>
+<text x="1315" y="694" class="ph">Servo pins (not fitted)</text>
+<text x="1315" y="716" class="s">The firmware still drives</text>
+<text x="1315" y="733" class="s">PA6/PA7 (D12/D11) with servo</text>
+<text x="1315" y="750" class="s">PWM for the legacy servo</text>
+<text x="1315" y="767" class="s">gizmo. The AK45-10 gizmo is</text>
+<text x="1315" y="784" class="s">on the CAN bus; leave these</text>
+<text x="1315" y="801" class="s">pins unwired.</text>
 <text x="30" y="1055" class="s b">Wires:</text>
 <path d="M90 1050 H126" fill="none" stroke="#d32f2f" stroke-width="4" stroke-linejoin="round"/>
 <text x="134" y="1055" class="s">+5V</text>
@@ -382,11 +355,7 @@
 <text x="467.0" y="1055" class="s">ECHO</text>
 <path d="M539.0 1050 H575.0" fill="none" stroke="#7b1fa2" stroke-width="4" stroke-linejoin="round"/>
 <text x="583.0" y="1055" class="s">battery sense</text>
-<path d="M722.5 1050 H758.5" fill="none" stroke="#ef6c00" stroke-width="4" stroke-linejoin="round"/>
-<text x="766.5" y="1055" class="s">servo signal</text>
-<path d="M898.5 1050 H934.5" fill="none" stroke="#6d4c41" stroke-width="4" stroke-linejoin="round"/>
-<text x="942.5" y="1055" class="s">servo -</text>
-<path d="M1037.0 1050 H1073.0" fill="none" stroke="#1565c0" stroke-width="4" stroke-linejoin="round"/>
-<text x="1081.0" y="1055" class="s">USB</text>
-<text x="1155.5" y="1055" class="s i">Dashed boxes: optional parts. Pin tables: docs/wiring.md.</text>
+<path d="M722.5 1050 H758.5" fill="none" stroke="#1565c0" stroke-width="4" stroke-linejoin="round"/>
+<text x="766.5" y="1055" class="s">USB</text>
+<text x="841.0" y="1055" class="s i">Dashed boxes: optional parts. Pin tables: docs/wiring.md.</text>
 </svg>

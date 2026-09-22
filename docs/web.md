@@ -122,6 +122,10 @@ in the terminal it was started from.
 - **The web E-stop is a software stop.** It publishes `/e_stop`, which locks twist_mux at
   priority 255, after sending a zero command. It depends on ROS, Wi-Fi and the browser all
   working. Keep the robot's physical power switch within reach.
+- **The web E-stop stops the wheels only.** The page refuses camera aim while it is engaged
+  ("Release the E-stop first"), but a follow mode keeps aiming the camera. On the real robot
+  the hardware E-stop S1 cuts power to all four motors, and the robot software must then be
+  restarted with the gizmo at its zero pose ([checklist.md](checklist.md#during-use)).
 - **`/e_stop` is shared with other nodes.** twist_mux applies the latest `/e_stop` message
   from any publisher (the lock has no timeout), so the web node treats the topic as shared
   state rather than its own:
@@ -307,3 +311,4 @@ use the browser's device toolbar at the same sizes.
 | "Unknown host name" (HTTP 421) | The page was opened under a name the robot does not know, such as a router DNS name. Use the IP address or `<hostname>.local`, or add the name to `allowed_hosts`. The web node logs each refused name once. |
 | "Someone engaged the E-stop" with nobody at a page | Another node published `true` on `/e_stop`. `ros2 topic info /e_stop --verbose` lists the publishers. |
 | Drive mode says a follower started outside this page is running | A `pixi run follow` or `follow-person` is still running in a terminal. Stop it there. |
+| Camera aim does nothing | The page shows why when it refuses: the E-stop is engaged, or a follow mode is active. Otherwise, on the robot: `gizmo_mode:=fixed` is set, or `gizmo_controller` is inactive after a gizmo fault or stall (`ros2 control list_controllers`). Put the gizmo at its zero pose and restart the robot software ([hardware.md](hardware.md#stopping-the-motors)). |

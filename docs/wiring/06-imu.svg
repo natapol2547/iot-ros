@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- iot_robot IMU wiring. Hand-written SVG; edit this file directly.
+     Pinout from the Raspberry Pi GPIO documentation (pin 1 3V3, pin 3 GPIO2 SDA,
+     pin 5 GPIO3 SCL, pins 6/9/14 GND). LSM9DS1 facts from the SparkFun LSM9DS1
+     hookup guide (VDD 2.4-3.6 V, 10 kOhm I2C pull-ups, 0x6B / 0x1E with SDO high).
+     imu_link axes as documented in iot_robot_drivers/lsm9ds1.py and on imu_link in
+     iot_robot_description/urdf/robot.urdf.xacro. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960">
+  <style>
+    text { font-family: Arial, Helvetica, sans-serif; fill: #1a1a1a; }
+    .title { font-size: 26px; font-weight: bold; }
+    .subtitle { font-size: 15px; fill: #444; }
+    .ph { font-size: 17px; font-weight: bold; fill: #0d47a1; }
+    .t { font-size: 14px; }
+    .s { font-size: 13px; fill: #333; }
+    .xs { font-size: 12px; fill: #555; }
+    .b { font-weight: bold; }
+    .w { fill: #ffffff; }
+    .mono { font-family: "DejaVu Sans Mono", Consolas, monospace; }
+    .pn { font-size: 14px; font-weight: bold; fill: #ffffff; }
+    .panel { fill: #fafafa; stroke: #999; stroke-width: 1.2; }
+    .lead { stroke: #555; stroke-width: 1.4; fill: none; }
+    .v33 { stroke: #ef6c00; stroke-width: 4; fill: none; }
+    .sda { stroke: #00838f; stroke-width: 4; fill: none; }
+    .scl { stroke: #7b1fa2; stroke-width: 4; fill: none; }
+    .gnd { stroke: #212121; stroke-width: 4; fill: none; }
+    .housing { fill: none; stroke: #ffffff; stroke-width: 1.6; stroke-dasharray: 5 4; }
+  </style>
+  <defs>
+    <marker id="ahx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#c62828"/>
+    </marker>
+    <marker id="ahy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#2e7d32"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1600" height="960" fill="#ffffff"/>
+
+  <text x="30" y="42" class="title">iot_robot: IMU wiring (LSM9DS1 to the Raspberry Pi 4 I2C bus)</text>
+  <text x="30" y="68" class="subtitle">Four wires from the 40-pin header, 3.3 V supply and logic. Accel/gyro at 0x6B, magnetometer at 0x1E. Power off before plugging.</text>
+
+  <!-- ================= 1. Pi 4 header, pins 1-14 ================= -->
+  <text x="40" y="104" class="ph">1. Raspberry Pi 4 GPIO header, pins 1-14</text>
+  <path d="M60 128 H720" stroke="#2e7d32" stroke-width="2" stroke-dasharray="8 5" fill="none"/>
+  <text x="720" y="121" class="xs" text-anchor="end">board edge (far side of the Pi)</text>
+  <!-- even-row names -->
+  <text x="110" y="168" class="xs b" text-anchor="middle">5V</text>
+  <text x="200" y="168" class="xs b" text-anchor="middle">5V</text>
+  <text x="290" y="168" class="xs b" text-anchor="middle">GND</text>
+  <text x="380" y="168" class="xs" text-anchor="middle">GPIO14</text>
+  <text x="470" y="168" class="xs" text-anchor="middle">GPIO15</text>
+  <text x="560" y="168" class="xs" text-anchor="middle">GPIO18</text>
+  <text x="650" y="168" class="xs b" text-anchor="middle">GND</text>
+  <!-- header body -->
+  <rect x="72" y="178" width="616" height="134" rx="6" fill="#263238"/>
+  <!-- even row: 2 4 6 8 10 12 14 -->
+  <circle cx="110" cy="212" r="18" fill="#c62828"/><text x="110" y="217" class="pn" text-anchor="middle">2</text>
+  <circle cx="200" cy="212" r="18" fill="#c62828"/><text x="200" y="217" class="pn" text-anchor="middle">4</text>
+  <circle cx="290" cy="212" r="18" fill="#000000" stroke="#9e9e9e" stroke-width="1.5"/><text x="290" y="217" class="pn" text-anchor="middle">6</text>
+  <circle cx="380" cy="212" r="18" fill="#9e9e9e"/><text x="380" y="217" class="pn" text-anchor="middle">8</text>
+  <circle cx="470" cy="212" r="18" fill="#9e9e9e"/><text x="470" y="217" class="pn" text-anchor="middle">10</text>
+  <circle cx="560" cy="212" r="18" fill="#9e9e9e"/><text x="560" y="217" class="pn" text-anchor="middle">12</text>
+  <circle cx="650" cy="212" r="18" fill="#000000" stroke="#9e9e9e" stroke-width="1.5"/><text x="650" y="217" class="pn" text-anchor="middle">14</text>
+  <!-- odd row: 1 3 5 7 9 11 13 (pin 1 has the square pad) -->
+  <rect x="92" y="260" width="36" height="36" rx="2" fill="#ef6c00"/><text x="110" y="283" class="pn" text-anchor="middle">1</text>
+  <circle cx="200" cy="278" r="18" fill="#00838f"/><text x="200" y="283" class="pn" text-anchor="middle">3</text>
+  <circle cx="290" cy="278" r="18" fill="#7b1fa2"/><text x="290" y="283" class="pn" text-anchor="middle">5</text>
+  <circle cx="380" cy="278" r="18" fill="#9e9e9e"/><text x="380" y="283" class="pn" text-anchor="middle">7</text>
+  <circle cx="470" cy="278" r="18" fill="#000000" stroke="#9e9e9e" stroke-width="1.5"/><text x="470" y="283" class="pn" text-anchor="middle">9</text>
+  <circle cx="560" cy="278" r="18" fill="#9e9e9e"/><text x="560" y="283" class="pn" text-anchor="middle">11</text>
+  <circle cx="650" cy="278" r="18" fill="#9e9e9e"/><text x="650" y="283" class="pn" text-anchor="middle">13</text>
+  <!-- Dupont housings -->
+  <rect class="housing" x="84" y="252" width="232" height="52" rx="6"/>
+  <rect class="housing" x="444" y="252" width="52" height="52" rx="6"/>
+  <text x="698" y="240" class="xs">pins 15-40</text>
+  <text x="698" y="255" class="xs">continue</text>
+
+  <!-- wires, drawn before the odd-row names so the names sit on top -->
+  <path class="gnd" d="M470 296 V400 H1001"/>
+  <path class="scl" d="M290 296 V440 H1001"/>
+  <path class="sda" d="M200 296 V480 H1001"/>
+  <path class="v33" d="M110 296 V520 H1001"/>
+
+  <!-- odd-row names, to the right of each wire -->
+  <text x="120" y="330" class="xs b">3V3</text>
+  <text x="210" y="330" class="xs b">GPIO2</text>
+  <text x="210" y="345" class="xs b">SDA</text>
+  <text x="300" y="330" class="xs b">GPIO3</text>
+  <text x="300" y="345" class="xs b">SCL</text>
+  <text x="390" y="330" class="xs">GPIO4</text>
+  <text x="480" y="330" class="xs b">GND</text>
+  <text x="570" y="330" class="xs">GPIO17</text>
+  <text x="660" y="330" class="xs">GPIO27</text>
+
+  <!-- wire labels -->
+  <text x="520" y="393" class="s b">GND: pin 9 (pin 6 also works)</text>
+  <text x="520" y="433" class="s b">SCL: pin 5 (GPIO3)</text>
+  <text x="520" y="473" class="s b">SDA: pin 3 (GPIO2)</text>
+  <text x="520" y="513" class="s b">3V3: pin 1, to VDD (named VIN on an Adafruit board)</text>
+  <text x="520" y="548" class="s">Four wires, under 30 cm, twisted or bundled together.</text>
+
+  <!-- ================= 2. imu_link axes ================= -->
+  <text x="800" y="104" class="ph">2. imu_link axes (as lsm9ds1_node reports them)</text>
+  <rect x="880" y="150" width="120" height="120" rx="4" fill="#424242"/>
+  <circle cx="892" cy="162" r="5" fill="#ffffff"/>
+  <text x="880" y="142" class="xs">pin-1 dot</text>
+  <path d="M929 210 H838" stroke="#c62828" stroke-width="3" fill="none" marker-end="url(#ahx)"/>
+  <path d="M940 221 V312" stroke="#2e7d32" stroke-width="3" fill="none" marker-end="url(#ahy)"/>
+  <circle cx="940" cy="210" r="10" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+  <circle cx="940" cy="210" r="3.5" fill="#1565c0"/>
+  <text x="828" y="215" class="t b" text-anchor="end" style="fill:#c62828">x</text>
+  <text x="950" y="316" class="t b" style="fill:#2e7d32">y</text>
+  <text x="955" y="200" class="t b w">z</text>
+  <text x="1040" y="150" class="s b">Chip seen from above, pin-1 dot at top left:</text>
+  <text x="1040" y="168" class="s b">x left, y down the page, z up out of the page.</text>
+  <text x="1040" y="192" class="s">These are the magnetometer's axes. The accelerometer and</text>
+  <text x="1040" y="210" class="s">gyroscope have X reversed (datasheet Figure 1); the driver</text>
+  <text x="1040" y="228" class="s">converts them, so /imu/data_raw and /imu/mag share imu_link.</text>
+  <text x="1040" y="252" class="s">Arrows printed on a breakout may show either set: go by</text>
+  <text x="1040" y="270" class="s">the chip dot and the check in panel C.</text>
+  <text x="1040" y="294" class="s b">Mount it flat with x forward: the URDF rpy stays 0 0 0.</text>
+
+  <!-- ================= 3. LSM9DS1 breakout ================= -->
+  <text x="990" y="356" class="ph">3. LSM9DS1 breakout</text>
+  <rect x="990" y="372" width="300" height="180" rx="8" fill="#ede7f6" stroke="#4527a0" stroke-width="2"/>
+  <rect x="1000" y="391" width="18" height="18" rx="2" fill="#ffd54f" stroke="#b28704"/>
+  <rect x="1000" y="431" width="18" height="18" rx="2" fill="#ffd54f" stroke="#b28704"/>
+  <rect x="1000" y="471" width="18" height="18" rx="2" fill="#ffd54f" stroke="#b28704"/>
+  <rect x="1000" y="511" width="18" height="18" rx="2" fill="#ffd54f" stroke="#b28704"/>
+  <text x="1026" y="405" class="s b">GND</text>
+  <text x="1026" y="445" class="s b">SCL</text>
+  <text x="1026" y="485" class="s b">SDA</text>
+  <text x="1026" y="525" class="s b">VDD</text>
+  <text x="1190" y="398" class="s b" text-anchor="middle">LSM9DS1 breakout</text>
+  <rect x="1150" y="416" width="80" height="80" rx="3" fill="#424242"/>
+  <circle cx="1159" cy="425" r="3.5" fill="#ffffff"/>
+  <text x="1190" y="461" class="xs w b" text-anchor="middle">LSM9DS1</text>
+  <text x="1190" y="530" class="xs" text-anchor="middle">other pins: leave open</text>
+  <text x="1140" y="574" class="s b" text-anchor="middle">Pad order differs between boards: match by the printed name.</text>
+
+  <!-- legend -->
+  <rect x="40" y="572" width="16" height="12" fill="#ef6c00"/><text x="62" y="583" class="xs">3V3</text>
+  <rect x="100" y="572" width="16" height="12" fill="#00838f"/><text x="122" y="583" class="xs">SDA</text>
+  <rect x="160" y="572" width="16" height="12" fill="#7b1fa2"/><text x="182" y="583" class="xs">SCL</text>
+  <rect x="220" y="572" width="16" height="12" fill="#212121"/><text x="242" y="583" class="xs">GND</text>
+  <rect x="290" y="572" width="16" height="12" fill="#c62828"/><text x="312" y="583" class="xs">5 V: option A2 power only</text>
+  <rect x="480" y="572" width="16" height="12" fill="#9e9e9e"/><text x="502" y="583" class="xs">not used here</text>
+  <rect x="600" y="568" width="30" height="20" rx="3" fill="#263238"/>
+  <rect x="604" y="571" width="22" height="14" rx="3" class="housing"/>
+  <text x="636" y="583" class="xs">Dupont housing</text>
+
+  <!-- ================= Panels ================= -->
+  <rect class="panel" x="30" y="600" width="500" height="340" rx="8"/>
+  <text x="45" y="628" class="ph">A. Wiring rules</text>
+  <text x="45" y="656" class="s">Pin 1 is the square pad at the end away from the USB and</text>
+  <text x="45" y="674" class="s">Ethernet ports, in the row away from the board edge.</text>
+  <text x="45" y="700" class="s b">3.3 V only (pin 1). Never pin 2 or 4: 5 V destroys a</text>
+  <text x="45" y="718" class="s b">SparkFun board, which has no regulator (VDD 2.4-3.6 V).</text>
+  <text x="45" y="744" class="s">Housings: one 1x3 on pins 1/3/5 and a single on pin 9.</text>
+  <text x="45" y="762" class="s">That leaves 2/4/6/14 free for option A2 (Pi powered</text>
+  <text x="45" y="780" class="s">through the header, docs/wiring.md section 1).</text>
+  <text x="45" y="806" class="s">Keep the four wires under 30 cm and together, away from</text>
+  <text x="45" y="824" class="s">the motor power and CAN wires.</text>
+  <text x="45" y="850" class="s">Pull-ups: 1.8 kΩ on the Pi (GPIO2/3) and 10 kΩ on the</text>
+  <text x="45" y="868" class="s">SparkFun board (jumper). Leave both in place.</text>
+  <text x="45" y="894" class="s">Other pins (CS, SDO, INT, DEN) stay open. Most boards pull</text>
+  <text x="45" y="912" class="s">SDO_AG and SDO_M high, which selects 0x6B and 0x1E.</text>
+
+  <rect class="panel" x="550" y="600" width="500" height="340" rx="8"/>
+  <text x="565" y="628" class="ph">B. Mounting</text>
+  <text x="565" y="656" class="s">On the chassis, not the gizmo. Rigid and flat, with nylon</text>
+  <text x="565" y="674" class="s">or brass screws; no steel parts close to the chip.</text>
+  <text x="565" y="700" class="s b">15-20 cm or more from the motors, battery, fuses and power</text>
+  <text x="565" y="718" class="s b">leads. 5 A in a wire 5 cm away makes about 20 µT; the</text>
+  <text x="565" y="736" class="s b">Earth's field is only 25-65 µT.</text>
+  <text x="565" y="762" class="s">Best on the centre line between the wheels: turning on the</text>
+  <text x="565" y="780" class="s">spot then adds little centripetal acceleration.</text>
+  <text x="565" y="806" class="s">Record the chip position from base_link (x forward, y left,</text>
+  <text x="565" y="824" class="s">z up) and its rotation. Both go into imu_joint in</text>
+  <text x="565" y="842" class="s">iot_robot_description/urdf/robot.urdf.xacro (placeholder</text>
+  <text x="565" y="860" class="s">for now: xyz 0 0 0.05, rpy 0 0 0).</text>
+  <text x="565" y="886" class="s">The filter runs without the magnetometer for now (use_mag:</text>
+  <text x="565" y="904" class="s">false in config/imu.yaml). The distance rule keeps that</text>
+  <text x="565" y="922" class="s">option open.</text>
+
+  <rect class="panel" x="1070" y="600" width="500" height="340" rx="8"/>
+  <text x="1085" y="628" class="ph">C. Software check</text>
+  <text x="1085" y="656" class="s">deploy/install.sh enables I2C (raspi-config) and installs</text>
+  <text x="1085" y="674" class="s">i2c-tools. Log out and in once for the i2c group, then:</text>
+  <text x="1100" y="698" class="s b mono">i2cdetect -y 1</text>
+  <text x="1085" y="722" class="s">It should show 1e and 6b. 1c or 6a means an SDO pin is</text>
+  <text x="1085" y="740" class="s">low: set mag_address / ag_address in config/imu.yaml.</text>
+  <text x="1085" y="766" class="s">Topics: /imu/data_raw and /imu/mag (lsm9ds1_node) and</text>
+  <text x="1085" y="784" class="s">/imu/data (Madgwick filter), all in the frame imu_link.</text>
+  <text x="1085" y="810" class="s b">Orientation check, robot level and still:</text>
+  <text x="1085" y="828" class="s">the axis pointing up reads about +9.8 m/s² in</text>
+  <text x="1085" y="846" class="s">/imu/data_raw. Turning left gives a positive angular</text>
+  <text x="1085" y="864" class="s">velocity about that same axis. With rpy 0 0 0, both are z.</text>
+  <text x="1085" y="890" class="s">Keep the robot still for the first seconds after start:</text>
+  <text x="1085" y="908" class="s">the node measures the gyro bias then (gyro_bias_samples).</text>
+</svg>

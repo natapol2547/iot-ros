@@ -5,15 +5,24 @@
 # not embedded). The readable overview is the hand-drawn docs/wiring/03-can-bus.svg;
 # keep the two consistent when changing pin assignments.
 #
-# Topology: USB-CAN adapter (bus end A, 120 ohm on) -> AK45-10 LEFT (ID 1)
-#           -> AK45-10 RIGHT (ID 2) -> 120 ohm terminator (bus end B).
+# Topology (physical order along the daisy chain):
+#   USB-CAN adapter (gs_usb, bus end A, 120 ohm)
+#   -> AK45-10 LEFT wheel -> AK45-10 RIGHT wheel
+#   -> AK45-10 gizmo YAW -> AK45-10 gizmo PITCH
+#   -> 120 ohm terminator (bus end B, on the gizmo).
+# CAN IDs are 10-13. The ID-to-joint mapping shown here (10 left wheel, 11 right
+# wheel, 12 gizmo yaw, 13 gizmo pitch) is ASSUMED until confirmed with
+#   pixi run -e robot can-identify
+# The wiring does not depend on the IDs: the mapping lives in
+# src/iot_robot_bringup/config/motors.yaml, keyed by URDF joint name.
+#
 # Pin order of the AK45-10 CAN port (A1257WR-S-4P: 1 CAN_L, 2 CAN_H, 3 CAN_H,
-# 4 CAN_L; pairs 1/2 and 3/4 bridged inside the driver) is from the CubeMars
+# 4 CAN_L; pairs 1/4 and 2/3 bridged inside the driver) is from the CubeMars
 # AK driver manual V1.0.18, section 1.2.3. Applies to the original (pre-V3.0)
 # AK45-10 with separate power and CAN connectors.
 # Rule used for every motor: bus in on pins 1/2, bus out on pins 3/4; the last
-# motor's out pair carries the terminator. The crossover drawn inside W2 is real:
-# CAN_H leaves the LEFT motor on pin 3 and enters the RIGHT motor on pin 2.
+# motor's out pair carries the terminator. The crossover drawn inside W2-W4 is
+# real: CAN_H leaves each motor on pin 3 and enters the next motor on pin 2.
 # Wire gauge: the A1257 crimp terminals take AWG 28-32 with 1.0 mm maximum
 # insulation OD (CJT A1257 datasheet), so every wire that ends in an A1257H-4P
 # plug is 28 AWG stranded. The supplied CubeMars CAN lead is 30 AWG.
@@ -21,7 +30,7 @@
 
 metadata:
   title: iot_robot CAN bus harness
-  description: USB-CAN adapter to two AK45-10 actuators, 1 Mbit/s
+  description: USB-CAN adapter to four AK45-10 actuators, 1 Mbit/s
 
 options:
   fontname: arial
@@ -36,25 +45,43 @@ options:
 connectors:
   X1:
     type: USB-CAN adapter
-    subtype: model TBD
+    subtype: gs_usb (can0)
     pinlabels: [CAN_L, CAN_H, GND]
     notes: >-
       Match terminals by name.<br/>
-      Bus end A: turn ON its<br/>
-      built-in 120 Ω terminator.
+      Bus end A: 120 Ω terminator<br/>
+      ON (built in) or fitted here.
   ML:
-    type: AK45-10 LEFT
+    type: AK45-10 LEFT wheel
     subtype: A1257WR-S-4P
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
-      CAN ID 1<br/>
+      wheel_joint_left<br/>
+      CAN ID 10 (assumed)<br/>
       bus in 1/2, out 3/4
   MR:
-    type: AK45-10 RIGHT
+    type: AK45-10 RIGHT wheel
     subtype: A1257WR-S-4P
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
-      CAN ID 2<br/>
+      wheel_joint_right<br/>
+      CAN ID 11 (assumed)<br/>
+      bus in 1/2, out 3/4
+  MY:
+    type: AK45-10 gizmo YAW
+    subtype: A1257WR-S-4P
+    pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
+    notes: >-
+      gizmo_yaw_joint<br/>
+      CAN ID 12 (assumed)<br/>
+      bus in 1/2, out 3/4
+  MP:
+    type: AK45-10 gizmo PITCH
+    subtype: A1257WR-S-4P
+    pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
+    notes: >-
+      gizmo_pitch_joint<br/>
+      CAN ID 13 (assumed)<br/>
       bus in 1/2, terminator 3/4
   RT:
     type: 120 Ω resistor
@@ -62,7 +89,7 @@ connectors:
     pinlabels: [CAN_H, CAN_L]
     notes: >-
       Bus end B. Soldered to<br/>
-      the W3 leads, heat-shrink.<br/>
+      the W5 leads, heat-shrink.<br/>
       Power OFF check:<br/>
       CAN_H to CAN_L = 60 Ω
   G0:
@@ -79,16 +106,31 @@ cables:
     gauge: 28 AWG
     colors: [BU, WH]
     notes: >-
-      adapter to LEFT<br/>
+      adapter to LEFT wheel<br/>
       A1257 crimps: AWG 28-32 only
   W2:
     type: twisted pair, stranded
     gauge: 28 AWG
     colors: [WH, BU]
     notes: >-
-      LEFT to RIGHT<br/>
+      LEFT wheel to RIGHT wheel<br/>
       A1257 crimps: AWG 28-32 only
   W3:
+    type: twisted pair, stranded
+    gauge: 28 AWG
+    colors: [WH, BU]
+    notes: >-
+      RIGHT wheel to gizmo YAW<br/>
+      A1257 crimps: AWG 28-32 only
+  W4:
+    type: twisted pair, stranded
+    gauge: 28 AWG
+    colors: [WH, BU]
+    notes: >-
+      gizmo YAW to gizmo PITCH<br/>
+      service loop across the yaw<br/>
+      joint (±45°, no slip ring)
+  W5:
     type: terminator leads
     gauge: 28 AWG
     colors: [WH, BU]
@@ -115,6 +157,14 @@ connections:
   -
     - MR: [3, 4]
     - W3: [1, 2]
+    - MY: [2, 1]
+  -
+    - MY: [3, 4]
+    - W4: [1, 2]
+    - MP: [2, 1]
+  -
+    - MP: [3, 4]
+    - W5: [1, 2]
     - RT: [1, 2]
   -
     - X1: [3]

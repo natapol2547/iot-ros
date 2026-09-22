@@ -2,15 +2,16 @@
 
 System configuration for the Raspberry Pi on the robot. Everything here is installed
 by one script; the ROS side lives in `src/iot_robot_bringup`. Pi setup from a blank SD
-card, motor configuration and the first power-on checklist are in
-[docs/hardware.md](../docs/hardware.md).
+card and motor configuration are in [docs/hardware.md](../docs/hardware.md), the
+one-time setup in order in [docs/todo.md](../docs/todo.md), and the routine for every
+session in [docs/checklist.md](../docs/checklist.md).
 
 | File | Installed as | Purpose |
 | --- | --- | --- |
 | `udev/99-iot-robot-stm32.rules` | `/etc/udev/rules.d/` | `/dev/stm32` symlink for the Nucleo's ST-LINK serial port (USB ID `0483:374b`) |
 | `network/80-iot-robot-can0.network` | `/etc/systemd/network/` | `can0` up at 1 Mbit/s with bus-off auto-restart, whenever the adapter appears |
 | `systemd/iot-robot.service` | `/etc/systemd/system/` | Runs `pixi run -e robot robot` at boot and restarts it if it exits |
-| `systemd/iot-robot.env` | `/etc/default/iot-robot` | `ROS_DOMAIN_ID`, extra launch arguments, and the CAN interface and motor IDs the service stops |
+| `systemd/iot-robot.env` | `/etc/default/iot-robot` | `ROS_DOMAIN_ID`, extra launch arguments, and the CAN interface the service stops the motors on |
 | `scripts/can_up.sh` | (run from the checkout) | Manual CAN bring-up, including slcan adapters |
 
 ## Install
@@ -21,44 +22,111 @@ Build the robot environment first, then run the installer as root from the check
 pixi install -e robot --locked
 pixi run -e robot build
 sudo deploy/install.sh
-sudo systemctl start iot-robot      # or reboot
+sudo reboot                         # finishes enabling I2C; the service starts at boot
 journalctl -u iot-robot -f
 ```
 
-`install.sh` also installs `can-utils` (`candump`, `cansend`, `slcand`), enables
-`systemd-networkd` and adds the user to the `dialout` and `video` groups. Options:
-`--user NAME` (default: the user who ran sudo), `--pixi PATH`, `--no-apt`, `--no-enable`.
-`sudo deploy/install.sh --uninstall` removes the udev rule, network file and service.
+The service zeroes the gizmo as it starts, so put the gizmo at its zero pose before it
+does ([docs/checklist.md](../docs/checklist.md)). On a new robot, install with
+`--no-enable` until the first power-on checks in [docs/todo.md](../docs/todo.md) have
+passed, then `sudo systemctl enable --now iot-robot`.
+
+Besides the files above, `install.sh`:
+
+- installs `can-utils` (`candump`, `cansend`, `slcand`) and `i2c-tools` (`i2cdetect`),
+- enables `systemd-networkd`,
+- enables the Pi's I2C bus 1 for the LSM9DS1 IMU with `raspi-config` (it sets
+  `dtparam=i2c_arm=on` in `/boot/firmware/config.txt` and loads `i2c-dev`). If
+  `/dev/i2c-1` does not exist yet it says `Reboot to finish enabling I2C`. Without
+  `raspi-config` it prints the manual steps instead; on a machine that is not a
+  Raspberry Pi it skips this step,
+- adds the user to the `dialout` (serial), `video` (camera) and `i2c` (IMU) groups. Log
+  out and back in for them to apply to your own shell.
+
+Options: `--user NAME` (default: the user who ran sudo), `--pixi PATH`, `--no-apt` (skip
+`can-utils` and `i2c-tools`), `--no-enable` (install the service but do not start it at
+boot). Running it again is safe. `sudo deploy/install.sh --uninstall` removes the udev
+rule, network file and service; it leaves `/etc/default/iot-robot`, the group
+memberships, the I2C setting, `can-utils`, `i2c-tools` and systemd-networkd in place.
 
 The service runs as that user from this checkout, so updating the robot is:
 
 ```bash
 git pull --recurse-submodules
 pixi run -e robot build
-sudo systemctl restart iot-robot
+sudo systemctl restart iot-robot    # gizmo at its zero pose first
 ```
 
-Launch arguments for the service go in `/etc/default/iot-robot`, for example
-`IOT_ROBOT_ARGS=gizmo_mode:=servo right_direction:=1`. Restart the service after editing it.
+### Settings
+
+Launch arguments for the service go in `IOT_ROBOT_ARGS` in `/etc/default/iot-robot`,
+separated by spaces. Restart the service after editing it. For example:
+
+```bash
+IOT_ROBOT_ARGS=gizmo_mode:=fixed                      # gizmo motors not driven
+IOT_ROBOT_ARGS=camera:=false web:=false
+IOT_ROBOT_ARGS=motors:=/home/pi/motors.yaml           # another motor file, absolute path
+```
+
+`pixi run -e robot ros2 launch iot_robot_bringup robot.launch.py --show-args` lists the
+arguments. `ros2 launch` silently ignores arguments it does not know, so a misspelt one
+has no effect and no error.
+
+**Motor CAN IDs and directions are not service settings.** They live in
+`src/iot_robot_bringup/config/motors.yaml` in this checkout
+([docs/hardware.md](../docs/hardware.md#motorsyaml)). Edit that file (or run
+`pixi run -e robot can-identify --write`); the change takes effect at the next
+`sudo systemctl restart iot-robot`, without a rebuild, because the build installs the
+file as a link. `IOT_MOTOR_IDS` and the launch arguments `left_can_id`, `right_can_id`,
+`left_direction` and `right_direction` no longer exist. `install.sh` keeps an existing
+`/etc/default/iot-robot`, so on a Pi installed before this change, remove them from that
+file by hand: nothing reads them any more.
+
+`IOT_CAN_INTERFACE` (default `can0`) is the interface the stop step below uses. If
+`IOT_ROBOT_ARGS` sets `can_interface`, set it to the same value. The stop step always
+reads the package's `motors.yaml`, even when `motors:=` points elsewhere, but it also
+stops every other motor it hears, so a different file is still covered.
+
+### Starting and stopping
+
+```bash
+sudo systemctl start iot-robot       # gizmo at its zero pose first
+sudo systemctl restart iot-robot     # after an E-stop or a motor fault, or to apply settings
+sudo systemctl stop iot-robot        # motors get zero speed, then are released
+sudo systemctl disable iot-robot     # no longer start at boot (enable to undo)
+journalctl -u iot-robot -e           # the latest log lines
+```
+
+After `stop` the wheels roll freely and the gizmo goes limp. Stop the service before
+using `cubemars_tool jog` or `can-identify`, which refuse to run while the robot is
+commanding the motors, or before opening `/dev/stm32` or the camera from another
+program.
 
 ### Behaviour at boot
 
-- The service does not wait for the CAN adapter. If `can0` or a motor is missing, the
-  launch's CAN pre-flight check fails with an explanation, the service exits, and systemd
-  retries every 5 s until the motors answer. `journalctl -u iot-robot` shows why.
+- The service does not wait for the CAN adapter. If `can0` or a motor is missing, for
+  example because the E-stop is pressed, the launch's CAN pre-flight check fails with an
+  explanation, the service exits, and systemd retries every 5 s until the motors answer.
+  `journalctl -u iot-robot` shows why. The start after that zeroes the gizmo wherever it
+  is, which is why the gizmo goes to its zero pose before the E-stop is released
+  ([docs/checklist.md](../docs/checklist.md)).
+- Each automatic restart (`Restart=always`) zeroes the gizmo again. A start that fails
+  while the motors are activated, for example a motor that does not answer or cannot be
+  zeroed, ends the launch, and systemd retries after 5 s. A motor fault while running
+  does not: the launch keeps running with the motors stopped until someone restarts it.
 - The service uses `pixi run --frozen`, which installs exactly what `pixi.lock` pins and
   never re-solves. A boot never waits on the network or changes package versions.
 - Stopping the service sends SIGINT, the same as Ctrl-C, so the controllers shut down
-  cleanly and the motor plugin stops the wheels. `KillMode=mixed` sends it to `ros2
+  cleanly and the motor plugin stops the motors. `KillMode=mixed` sends it to `ros2
   launch` only, which forwards it to each node once; with the default `KillMode` every
   node would get it twice and some would die mid-shutdown. Whatever still runs after
   15 s gets SIGKILL.
-- After every stop, crash or kill, `ExecStopPost` runs `cubemars_tool stop`: zero speed
-  for 0.3 s, then release, on `IOT_CAN_INTERFACE` (default `can0`) to `IOT_MOTOR_IDS`
-  (default `1 2`). It covers the case where the launch itself dies before it can stop
-  the motors, and does nothing when the CAN link is not up. If `IOT_ROBOT_ARGS` changes
-  `can_interface`, `left_can_id` or `right_can_id`, set these two in
-  `/etc/default/iot-robot` to match.
+- After every stop, crash or kill, `ExecStopPost` runs
+  `cubemars_tool --interface ${IOT_CAN_INTERFACE} stop`: zero speed for 0.3 s, then
+  release, to every CAN ID in `motors.yaml` plus any other motor it hears on the bus. It
+  covers the case where the launch itself dies before it can stop the motors, and does
+  nothing when the CAN link is not up. The journal shows
+  `Motors 10, 11, 12, 13 on can0: zero speed for 0.3 s, then released`.
 - `LimitRTPRIO=99` lets `controller_manager` use real-time (SCHED_FIFO) scheduling.
 - When NetworkManager is active (Raspberry Pi OS), `install.sh` disables
   `systemd-networkd-wait-online`. networkd then manages only `can0`, which never counts
@@ -95,7 +163,7 @@ one.
 **SPI HATs** need a device-tree overlay in `/boot/firmware/config.txt` whose oscillator
 frequency matches the crystal on the board, e.g. for a Waveshare RS485 CAN HAT with a
 12 MHz crystal: `dtoverlay=mcp2515-can0,oscillator=12000000,interrupt=25`. The MCP2515
-has only two receive buffers, so at 1 Mbit/s with two motors reporting at 200 Hz it can
+has only two receive buffers, so at 1 Mbit/s with four motors reporting at 200 Hz it can
 drop frames on a busy Pi; an MCP2518FD board does not have that limit.
 
 **slcan.** The adapter speaks an ASCII protocol over a serial port, and `slcand` (from
@@ -136,9 +204,12 @@ candleLight adapter or a CAN HAT.
 
 ```bash
 ip -details link show can0           # "can state ERROR-ACTIVE", "bitrate 1000000"
-candump can0                         # status frames 00002901 and 00002902 from the motors
-pixi run -e robot can-check          # interface up and both motors reporting
+candump can0                         # status frames 0000290A to 0000290D from the motors
+pixi run -e robot can-check          # interface up and every motor in motors.yaml reporting
+pixi run -e robot can-watch          # live values of every motor, labelled with its joint
 ```
+
+A status frame's ID is `0x2900` plus the motor's CAN ID, so CAN ID 10 sends `0000290A`.
 
 `ERROR-PASSIVE` or `BUS-OFF` means frames are not being acknowledged: motors unpowered,
 CANH and CANL swapped, a bitrate mismatch, or missing termination. With everything

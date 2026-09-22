@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- iot_robot power distribution. Hand-written SVG; edit this file directly. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1170" viewBox="0 0 1600 1170">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1190" viewBox="0 0 1600 1190">
   <style>
     text { font-family: Arial, Helvetica, sans-serif; fill: #1a1a1a; }
     .title { font-size: 26px; font-weight: bold; }
@@ -10,28 +10,26 @@
     .t { font-size: 14px; }
     .s { font-size: 13px; fill: #333; }
     .b { font-weight: bold; }
+    .red { fill: #b71c1c; }
     .box { stroke: #333; stroke-width: 1.6; }
     .pwr { fill: #fff3e0; }
     .act { fill: #e3f2fd; }
     .cpu { fill: #e8f5e9; }
-    .opt { fill: #ffffff; stroke-dasharray: 7 5; }
     .panel { fill: #fafafa; stroke: #999; stroke-width: 1.2; }
     .pos { stroke: #c62828; stroke-width: 6; fill: none; stroke-linejoin: round; }
     .neg { stroke: #212121; stroke-width: 6; fill: none; stroke-linejoin: round; }
     .v5 { stroke: #ef6c00; stroke-width: 5; fill: none; }
     .gnd5 { stroke: #212121; stroke-width: 4; fill: none; }
-    .ctl { stroke: #c62828; stroke-width: 2.5; fill: none; stroke-linejoin: round; }
     .wire { stroke: #333; stroke-width: 2.2; fill: none; stroke-linejoin: round; }
     .sense { stroke: #6d4c41; stroke-width: 2.5; fill: none; }
     .dash { stroke-dasharray: 8 6; }
-    .thin { stroke-width: 3.5; }
     .sym { fill: #ffffff; stroke: #333; stroke-width: 2; }
     .term { fill: #ffffff; stroke: #333; stroke-width: 2; }
     .jdot { fill: #c62828; }
     .ndot { fill: #212121; }
     .flag { fill: #fafafa; stroke: #777; stroke-width: 1.2; }
   </style>
-  <rect x="0" y="0" width="1600" height="1170" fill="#ffffff"/>
+  <rect x="0" y="0" width="1600" height="1190" fill="#ffffff"/>
 
   <text x="30" y="42" class="title">iot_robot: power distribution</text>
   <text x="30" y="68" class="subtitle">Red = +24 V, black = 0 V (battery negative), orange = 5 V. Ratings are recommendations; check them against the parts you buy.</text>
@@ -40,19 +38,22 @@
   <path class="pos" d="M120 320 V200 H250"/>
   <path class="pos" d="M340 200 H405"/>
   <path class="pos" d="M515 200 H785"/>
-  <path class="pos" d="M895 200 H1450"/>
-  <path class="pos" d="M1070 200 V330"/>
-  <path class="pos" d="M1260 200 V330"/>
-  <path class="pos dash thin" d="M1450 200 V330"/>
+  <path class="pos" d="M895 200 H1255"/>
+  <path class="pos" d="M1305 200 H1520"/>
+  <path class="pos" d="M1040 200 V330"/>
+  <path class="pos" d="M1180 200 V330"/>
+  <path class="pos" d="M1380 200 V330"/>
+  <path class="pos" d="M1520 200 V330"/>
   <path class="pos" d="M590 200 V270"/>
   <path class="pos" d="M590 330 V380"/>
   <path class="sense dash" d="M590 200 V124"/>
 
   <!-- ================= 0 V return path ================= -->
   <path class="neg" d="M120 480 V600 H1450"/>
-  <path class="neg" d="M1070 450 V600"/>
-  <path class="neg" d="M1260 450 V600"/>
-  <path class="neg dash thin" d="M1450 450 V600"/>
+  <path class="neg" d="M1040 450 V600"/>
+  <path class="neg" d="M1180 450 V600"/>
+  <path class="neg" d="M1380 450 V540 H1520 V450"/>
+  <path class="neg" d="M1450 540 V600"/>
   <path class="neg" d="M560 500 V600"/>
 
   <!-- ================= Buck to Pi ================= -->
@@ -62,19 +63,24 @@
   <!-- junction dots -->
   <circle class="jdot" cx="590" cy="200" r="7"/>
   <circle class="jdot" cx="960" cy="200" r="7"/>
-  <circle class="jdot" cx="1070" cy="200" r="6"/>
-  <circle class="jdot" cx="1260" cy="200" r="6"/>
+  <circle class="jdot" cx="1040" cy="200" r="6"/>
+  <circle class="jdot" cx="1180" cy="200" r="6"/>
+  <circle class="jdot" cx="1380" cy="200" r="7"/>
+  <circle class="jdot" cx="1520" cy="200" r="6"/>
   <circle class="ndot" cx="560" cy="600" r="6"/>
-  <circle class="ndot" cx="1070" cy="600" r="6"/>
-  <circle class="ndot" cx="1260" cy="600" r="6"/>
+  <circle class="ndot" cx="1040" cy="600" r="6"/>
+  <circle class="ndot" cx="1180" cy="600" r="6"/>
+  <circle class="ndot" cx="1450" cy="600" r="6"/>
+  <circle class="ndot" cx="1450" cy="540" r="7"/>
 
   <!-- Battery -->
   <rect class="box pwr" x="40" y="320" width="160" height="160" rx="8"/>
-  <text x="120" y="356" class="h" text-anchor="middle">6S LiPo</text>
-  <text x="120" y="380" class="t" text-anchor="middle">22.2 V nominal</text>
-  <text x="120" y="400" class="t" text-anchor="middle">25.2 V full</text>
-  <text x="120" y="420" class="t" text-anchor="middle">stop at 21 V</text>
-  <text x="120" y="446" class="s" text-anchor="middle">plug TBD (XT60?)</text>
+  <text x="120" y="352" class="h" text-anchor="middle">6S LiPo</text>
+  <text x="120" y="376" class="t" text-anchor="middle">22.2 V nominal</text>
+  <text x="120" y="396" class="t" text-anchor="middle">25.2 V full</text>
+  <text x="120" y="416" class="t" text-anchor="middle">stop at 21 V</text>
+  <text x="120" y="442" class="s" text-anchor="middle">XT60 plug</text>
+  <text x="120" y="460" class="s" text-anchor="middle">capacity TBD</text>
   <text x="132" y="306" class="h" fill="#c62828">+</text>
   <text x="132" y="508" class="h">-</text>
   <text x="132" y="262" class="s">16 AWG</text>
@@ -108,51 +114,65 @@
   <line x1="840" y1="207" x2="840" y2="165" stroke="#333" stroke-width="2" stroke-dasharray="4 3"/>
   <path d="M818 165 A22 22 0 0 1 862 165 Z" fill="#d32f2f" stroke="#7f0000" stroke-width="1.5"/>
   <text x="840" y="128" class="h" text-anchor="middle" fill="#b71c1c">S1 E-STOP (NC, latching)</text>
-  <text x="840" y="236" class="s" text-anchor="middle">cuts motor power only: the wheels</text>
-  <text x="840" y="252" class="s" text-anchor="middle">coast, the Pi stays on. Contacts</text>
-  <text x="840" y="268" class="s" text-anchor="middle">10 A DC or more, else see C</text>
+  <text x="840" y="236" class="s" text-anchor="middle">cuts all four motors: the wheels</text>
+  <text x="840" y="252" class="s" text-anchor="middle">coast, the gizmo goes limp and</text>
+  <text x="840" y="268" class="s" text-anchor="middle">loses its zero. The Pi stays on.</text>
 
-  <!-- recovery: the motor plugin latches a stop while the drives are unpowered, and
-       restarting the robot software lets any active command drive again -->
-  <rect x="752" y="282" width="230" height="80" rx="4" fill="#ffebee" stroke="#b71c1c" stroke-width="1.5"/>
-  <text x="867" y="300" class="s b" text-anchor="middle" fill="#b71c1c">After an E-stop press:</text>
-  <text x="867" y="318" class="s" text-anchor="middle">stop follower and teleop,</text>
-  <text x="867" y="336" class="s" text-anchor="middle">release S1, then restart</text>
-  <text x="867" y="354" class="s" text-anchor="middle">the robot software.</text>
+  <rect x="752" y="286" width="210" height="40" rx="4" fill="#ffebee" stroke="#b71c1c" stroke-width="1.5"/>
+  <text x="857" y="302" class="s b" text-anchor="middle" fill="#b71c1c">After an E-stop press:</text>
+  <text x="857" y="319" class="s" text-anchor="middle">recovery order in panel C</text>
+
+  <!-- motor ratings note -->
+  <text x="990" y="110" class="s">Each AK45-10: XT30PW-M input (pin 1 -, pin 2 +), 18-28 V,</text>
+  <text x="990" y="128" class="s">2.1 A rated, 5 A peak, about 50 mA idle.</text>
 
   <text x="968" y="186" class="s b">J2</text>
-  <text x="1090" y="188" class="s">+24 V motor bus, 16 AWG</text>
+  <text x="1052" y="188" class="s">wheel pairs, 16 AWG</text>
+  <text x="1392" y="186" class="s"><tspan class="b">J3</tspan> gizmo branch, 20 AWG</text>
 
-  <!-- Motors and optional servo BEC -->
-  <rect class="box act" x="990" y="330" width="160" height="120" rx="8"/>
-  <text x="1070" y="360" class="h" text-anchor="middle">AK45-10 LEFT</text>
-  <text x="1070" y="384" class="t" text-anchor="middle">XT30 power input</text>
-  <text x="1070" y="406" class="t" text-anchor="middle">5 A peak, 2.1 A rated</text>
-  <text x="1070" y="428" class="t" text-anchor="middle">18-28 V allowed</text>
+  <!-- F3 gizmo branch fuse (holder at J2) -->
+  <rect class="sym" x="1255" y="189" width="50" height="22" rx="3"/>
+  <line x1="1255" y1="200" x2="1305" y2="200" stroke="#333" stroke-width="2"/>
+  <text x="1280" y="176" class="h" text-anchor="middle">F3 5 A</text>
+  <text x="1280" y="234" class="s" text-anchor="middle">holder</text>
+  <text x="1280" y="250" class="s" text-anchor="middle">at J2</text>
 
-  <rect class="box act" x="1180" y="330" width="160" height="120" rx="8"/>
-  <text x="1260" y="360" class="h" text-anchor="middle">AK45-10 RIGHT</text>
-  <text x="1260" y="384" class="t" text-anchor="middle">XT30 power input</text>
-  <text x="1260" y="406" class="t" text-anchor="middle">5 A peak, 2.1 A rated</text>
-  <text x="1260" y="428" class="t" text-anchor="middle">18-28 V allowed</text>
+  <!-- Motors -->
+  <rect class="box act" x="980" y="330" width="120" height="120" rx="8"/>
+  <text x="1040" y="360" class="h" text-anchor="middle">LEFT</text>
+  <text x="1040" y="380" class="h" text-anchor="middle">wheel</text>
+  <text x="1040" y="404" class="t" text-anchor="middle">AK45-10</text>
+  <text x="1040" y="426" class="s" text-anchor="middle">own pair to J2</text>
 
-  <rect class="box opt" x="1370" y="330" width="160" height="120" rx="8"/>
-  <text x="1450" y="360" class="h" text-anchor="middle">Servo BEC</text>
-  <text x="1450" y="384" class="t" text-anchor="middle">optional</text>
-  <text x="1450" y="406" class="t" text-anchor="middle">input rated for 6S</text>
-  <text x="1450" y="428" class="t" text-anchor="middle">out 5-6 V, 3 A</text>
+  <rect class="box act" x="1120" y="330" width="120" height="120" rx="8"/>
+  <text x="1180" y="360" class="h" text-anchor="middle">RIGHT</text>
+  <text x="1180" y="380" class="h" text-anchor="middle">wheel</text>
+  <text x="1180" y="404" class="t" text-anchor="middle">AK45-10</text>
+  <text x="1180" y="426" class="s" text-anchor="middle">own pair to J2</text>
 
-  <!-- F3 servo BEC branch fuse (optional, holder at J2) -->
-  <rect class="sym" x="1439" y="240" width="22" height="54" rx="3"/>
-  <line x1="1450" y1="240" x2="1450" y2="294" stroke="#333" stroke-width="2"/>
-  <text x="1472" y="262" class="h">F3 3 A</text>
-  <text x="1472" y="282" class="s">holder at J2</text>
+  <rect class="box act" x="1320" y="330" width="120" height="120" rx="8"/>
+  <text x="1380" y="360" class="h" text-anchor="middle">gizmo</text>
+  <text x="1380" y="380" class="h" text-anchor="middle">YAW</text>
+  <text x="1380" y="404" class="t" text-anchor="middle">AK45-10</text>
+  <text x="1380" y="426" class="s" text-anchor="middle">lead to J3</text>
 
-  <text x="1078" y="322" class="t b" fill="#c62828">+</text>
-  <text x="1268" y="322" class="t b" fill="#c62828">+</text>
-  <text x="1078" y="470" class="t b">-</text>
-  <text x="1268" y="470" class="t b">-</text>
-  <text x="1090" y="590" class="s">0 V bus, 16 AWG</text>
+  <rect class="box act" x="1460" y="330" width="120" height="120" rx="8"/>
+  <text x="1520" y="360" class="h" text-anchor="middle">gizmo</text>
+  <text x="1520" y="380" class="h" text-anchor="middle">PITCH</text>
+  <text x="1520" y="404" class="t" text-anchor="middle">AK45-10</text>
+  <text x="1520" y="426" class="s" text-anchor="middle">loop across yaw</text>
+
+  <text x="1048" y="322" class="t b" fill="#c62828">+</text>
+  <text x="1188" y="322" class="t b" fill="#c62828">+</text>
+  <text x="1388" y="322" class="t b" fill="#c62828">+</text>
+  <text x="1528" y="322" class="t b" fill="#c62828">+</text>
+  <text x="1048" y="470" class="t b">-</text>
+  <text x="1188" y="470" class="t b">-</text>
+  <text x="1388" y="470" class="t b">-</text>
+  <text x="1528" y="470" class="t b">-</text>
+  <text x="1462" y="560" class="s">J3, 0 V side:</text>
+  <text x="1462" y="576" class="s">one 20 AWG return</text>
+  <text x="1200" y="590" class="s">0 V bus, 16 AWG</text>
   <text x="600" y="622" class="s b">0 V bus = one terminal block, the ground star point: every return has its own wire to it.</text>
   <text x="200" y="590" class="s">battery negative</text>
 
@@ -167,7 +187,7 @@
   <rect class="box pwr" x="500" y="380" width="200" height="120" rx="8"/>
   <text x="600" y="408" class="h" text-anchor="middle">Buck converter</text>
   <text x="600" y="430" class="t" text-anchor="middle">24 V in, 5.1 V out</text>
-  <text x="600" y="450" class="t" text-anchor="middle">5 A (Pi 5), 3 A (Pi 4)</text>
+  <text x="600" y="450" class="t" text-anchor="middle">3 A or more (5 A: margin)</text>
   <text x="600" y="470" class="t" text-anchor="middle">input 30 V or more</text>
   <text x="600" y="490" class="s" text-anchor="middle">model TBD</text>
   <text x="568" y="522" class="s">IN-</text>
@@ -175,70 +195,72 @@
   <text x="735" y="490" class="s" text-anchor="middle">0 V</text>
 
   <!-- Pi -->
-  <rect class="box cpu" x="770" y="380" width="140" height="120" rx="8"/>
-  <text x="840" y="412" class="h" text-anchor="middle">Raspberry Pi</text>
-  <text x="840" y="436" class="t" text-anchor="middle">model TBD</text>
-  <text x="840" y="458" class="t" text-anchor="middle">USB-C in (A1)</text>
-  <text x="840" y="478" class="t" text-anchor="middle">or GPIO (A2)</text>
-  <text x="840" y="524" class="s" text-anchor="middle">18 AWG, 30 cm max</text>
+  <rect class="box cpu" x="770" y="380" width="150" height="120" rx="8"/>
+  <text x="845" y="412" class="h" text-anchor="middle">Raspberry Pi 4</text>
+  <text x="845" y="440" class="t" text-anchor="middle">USB-C in (A1)</text>
+  <text x="845" y="462" class="t" text-anchor="middle">or GPIO (A2)</text>
+  <text x="845" y="524" class="s" text-anchor="middle">18 AWG, 30 cm max</text>
 
   <!-- ================= Panel A: feeding the Pi ================= -->
-  <rect class="panel" x="30" y="640" width="495" height="515" rx="8"/>
-  <text x="45" y="668" class="ph">A. Feeding 5 V into the Pi</text>
+  <rect class="panel" x="30" y="640" width="495" height="535" rx="8"/>
+  <text x="45" y="668" class="ph">A. Feeding 5.1 V into the Pi 4</text>
   <text x="45" y="698" class="t b">A1 (recommended): USB-C socket</text>
   <text x="45" y="720" class="s">- USB-C power lead from the buck output, short and thick.</text>
   <text x="45" y="738" class="s">- Keeps the Pi's own input protection in the circuit.</text>
-  <text x="45" y="756" class="s">- A plain buck does not talk USB-PD. A Pi 5 then assumes a</text>
-  <text x="56" y="774" class="s">3 A supply and limits its USB ports to 600 mA in total.</text>
-  <text x="45" y="792" class="s">- If the buck really delivers 5 A, set PSU_MAX_CURRENT=5000</text>
-  <text x="56" y="810" class="s">in the Pi 5 bootloader EEPROM to lift that limit.</text>
+  <text x="45" y="756" class="s">- A Pi 4 needs no USB-PD: a plain 5.1 V, 3 A buck is a full</text>
+  <text x="56" y="774" class="s">supply. Its USB ports get 1.2 A in total with any supply.</text>
 
-  <text x="45" y="846" class="t b">A2: GPIO header pins</text>
-  <text x="45" y="868" class="s">- 5 V to pins 2 and 4, 0 V to pins 6 and 14.</text>
-  <text x="45" y="886" class="s">- Bypasses the Pi's input protection: a</text>
-  <text x="56" y="904" class="s">failed buck puts up to 25 V onto the Pi.</text>
-  <text x="45" y="922" class="s">- Dupont contacts carry about 1-1.5 A each.</text>
-  <text x="56" y="940" class="s">Use a 1x3 housing on pins 2/4/6 plus one</text>
-  <text x="56" y="958" class="s">contact on pin 14, never a 2x2 housing.</text>
-  <text x="45" y="976" class="s">- Same 600 mA USB limit on a Pi 5 unless</text>
-  <text x="56" y="994" class="s">usb_max_current_enable=1 or PSU_MAX_CURRENT.</text>
+  <text x="45" y="810" class="t b">A2: GPIO header pins</text>
+  <text x="45" y="832" class="s">- 5 V to pins 2 and 4, 0 V to 6 and 14.</text>
+  <text x="45" y="850" class="s">- Bypasses the Pi's input protection:</text>
+  <text x="56" y="868" class="s">a failed buck puts up to 25 V onto</text>
+  <text x="56" y="886" class="s">the Pi. Only with a buck that has</text>
+  <text x="56" y="904" class="s">output over-voltage protection.</text>
+  <text x="45" y="922" class="s">- Dupont contacts carry about 1-1.5 A</text>
+  <text x="56" y="940" class="s">each: 1x3 housing on pins 2/4/6 plus</text>
+  <text x="56" y="958" class="s">one contact on pin 14. Never 2x2.</text>
 
-  <text x="45" y="1030" class="t b">Buck rating</text>
-  <text x="45" y="1052" class="s">- Pi 5: 5.1 V, 5 A (the official PSU is 27 W). Pi 4: 5.1 V, 3 A.</text>
-  <text x="45" y="1070" class="s">- The Pi warns about undervoltage below 4.63 V: set the</text>
-  <text x="56" y="1088" class="s">buck to 5.1 V with no load, then check it under load.</text>
-  <text x="45" y="1106" class="s">- The camera takes about 250 mA; USB-CAN adapter and</text>
-  <text x="56" y="1124" class="s">Nucleo are powered from the Pi's USB ports.</text>
+  <text x="45" y="990" class="s b">IMU on the same header (06-imu.svg):</text>
+  <text x="45" y="1008" class="s">- 3V3 pin 1, SDA pin 3, SCL pin 5, GND pin 9.</text>
+  <text x="56" y="1026" class="s">1x3 housing on pins 1/3/5 plus one contact on 9.</text>
 
-  <!-- 40-pin header snippet, pins 1-14 -->
-  <g transform="translate(-22,0)">
-  <text x="450" y="846" class="s b" text-anchor="middle">Pi header, pins 1-14</text>
-  <rect x="420" y="858" width="60" height="148" rx="4" fill="#263238"/>
-  <!-- odd column (x=437), even column (x=463); rows every 20 px from y=872 -->
-  <rect x="430" y="865" width="14" height="14" fill="#ffffff" stroke="#999"/>
-  <circle cx="463" cy="872" r="7" fill="#c62828"/>
-  <circle cx="437" cy="892" r="7" fill="#b0bec5"/>
-  <circle cx="463" cy="892" r="7" fill="#c62828"/>
-  <circle cx="437" cy="912" r="7" fill="#b0bec5"/>
-  <circle cx="463" cy="912" r="7" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
-  <circle cx="437" cy="932" r="7" fill="#b0bec5"/>
-  <circle cx="463" cy="932" r="7" fill="#b0bec5"/>
-  <circle cx="437" cy="952" r="7" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
-  <circle cx="463" cy="952" r="7" fill="#b0bec5"/>
-  <circle cx="437" cy="972" r="7" fill="#b0bec5"/>
-  <circle cx="463" cy="972" r="7" fill="#b0bec5"/>
-  <circle cx="437" cy="992" r="7" fill="#b0bec5"/>
-  <circle cx="463" cy="992" r="7" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
-  <text x="488" y="877" class="s">2 5V</text>
-  <text x="488" y="897" class="s">4 5V</text>
-  <text x="488" y="917" class="s">6 GND</text>
-  <text x="488" y="997" class="s">14 GND</text>
-  <text x="414" y="957" class="s" text-anchor="end">GND 9</text>
-  <text x="420" y="1022" class="s">pin 1 = square pad</text>
-  </g>
+  <text x="45" y="1058" class="t b">Buck rating</text>
+  <text x="45" y="1080" class="s">- 5.1 V, 3 A or more (official Pi 4 PSU: 3 A); 5 A adds margin.</text>
+  <text x="45" y="1098" class="s">- Input 30 V or more. Set 5.1 V with no load, recheck under</text>
+  <text x="56" y="1116" class="s">load: the Pi warns about undervoltage below 4.63 V.</text>
+  <text x="45" y="1134" class="s">- Camera about 250 mA; the USB-CAN adapter and the</text>
+  <text x="56" y="1152" class="s">Nucleo run from the Pi's USB ports.</text>
+
+  <!-- 40-pin header snippet, pins 1-14: odd column x=415, even column x=441,
+       rows every 20 px from y=840 -->
+  <text x="428" y="810" class="s b" text-anchor="middle">Pi 4 header, pins 1-14</text>
+  <rect x="398" y="826" width="60" height="148" rx="4" fill="#263238"/>
+  <rect x="408" y="833" width="14" height="14" fill="#ff8f00" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="441" cy="840" r="7" fill="#c62828"/>
+  <circle cx="415" cy="860" r="7" fill="#00838f" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="441" cy="860" r="7" fill="#c62828"/>
+  <circle cx="415" cy="880" r="7" fill="#00838f" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="441" cy="880" r="7" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
+  <circle cx="415" cy="900" r="7" fill="#b0bec5"/>
+  <circle cx="441" cy="900" r="7" fill="#b0bec5"/>
+  <circle cx="415" cy="920" r="7" fill="#000000" stroke="#00838f" stroke-width="2"/>
+  <circle cx="441" cy="920" r="7" fill="#b0bec5"/>
+  <circle cx="415" cy="940" r="7" fill="#b0bec5"/>
+  <circle cx="441" cy="940" r="7" fill="#b0bec5"/>
+  <circle cx="415" cy="960" r="7" fill="#b0bec5"/>
+  <circle cx="441" cy="960" r="7" fill="#000000" stroke="#ffffff" stroke-width="1.5"/>
+  <text x="466" y="845" class="s">2 5V</text>
+  <text x="466" y="865" class="s">4 5V</text>
+  <text x="466" y="885" class="s">6 GND</text>
+  <text x="466" y="965" class="s">14 GND</text>
+  <text x="392" y="845" class="s" text-anchor="end">3V3 1</text>
+  <text x="392" y="865" class="s" text-anchor="end">SDA 3</text>
+  <text x="392" y="885" class="s" text-anchor="end">SCL 5</text>
+  <text x="392" y="925" class="s" text-anchor="end">GND 9</text>
+  <text x="398" y="990" class="s">pin 1 = square pad</text>
 
   <!-- ================= Panel B: battery sense ================= -->
-  <rect class="panel" x="545" y="640" width="470" height="515" rx="8"/>
+  <rect class="panel" x="545" y="640" width="470" height="535" rx="8"/>
   <text x="560" y="668" class="ph">B. Battery sense (optional)</text>
   <text x="650" y="704" class="s b" text-anchor="middle">J1 (+24 V switched)</text>
   <path class="sense" d="M650 712 V730"/>
@@ -273,57 +295,32 @@
   <text x="560" y="1114" class="s">- Tapped after SW1, so it draws nothing when switched off.</text>
   <text x="560" y="1132" class="s">- Off by default in firmware; the STM32 then sends no V: field.</text>
 
-  <!-- ================= Panel C: E-stop through a relay ================= -->
-  <rect class="panel" x="1035" y="640" width="535" height="515" rx="8"/>
-  <text x="1050" y="668" class="ph">C. E-stop through a relay (alternative)</text>
-  <text x="1050" y="692" class="s">Use this if the E-stop contact is not rated for 10 A DC or more.</text>
+  <!-- ================= Panel C: E-stop effects and recovery ================= -->
+  <rect class="panel" x="1035" y="640" width="535" height="535" rx="8"/>
+  <text x="1050" y="668" class="ph">C. E-stop: what it cuts, and how to recover</text>
+  <text x="1050" y="694" class="s">S1 cuts the + supply of all four motors. The Pi, camera, IMU</text>
+  <text x="1050" y="712" class="s">and Nucleo stay on, and the 0 V bus stays connected.</text>
+  <text x="1050" y="734" class="s">- <tspan class="b">Wheels</tspan>: no torque, they coast. The 10:1 gearbox is</text>
+  <text x="1061" y="752" class="s">backdrivable, so the robot can roll on a slope.</text>
+  <text x="1050" y="770" class="s">- <tspan class="b">Gizmo</tspan>: goes limp and loses its zero. The single-turn</text>
+  <text x="1061" y="788" class="s">encoder cannot keep the origin over a power cut.</text>
+  <text x="1050" y="806" class="s">- <tspan class="b">Software</tspan>: the drives go silent; after 100 ms the motor</text>
+  <text x="1061" y="824" class="s">plugin stops commanding them and latches the stop.</text>
 
-  <path class="pos" d="M1080 760 H1255"/>
-  <path class="pos" d="M1345 760 H1520"/>
-  <circle class="jdot" cx="1080" cy="760" r="6"/>
-  <text x="1070" y="745" class="s b">J1</text>
-  <text x="1520" y="745" class="s b" text-anchor="end">J2 motor bus</text>
-  <circle class="term" cx="1260" cy="760" r="5"/>
-  <circle class="term" cx="1340" cy="760" r="5"/>
-  <line x1="1264" y1="757" x2="1334" y2="738" stroke="#333" stroke-width="3"/>
-  <text x="1300" y="728" class="s b" text-anchor="middle">K1 contact (NO)</text>
-  <line x1="1300" y1="846" x2="1300" y2="750" stroke="#333" stroke-width="1.8" stroke-dasharray="5 4"/>
+  <text x="1050" y="856" class="s b red">Recovery, in this order:</text>
+  <text x="1050" y="878" class="s">1. Stop every node that commands motion: teleop, the</text>
+  <text x="1066" y="896" class="s">follower, the drive controls on the web page.</text>
+  <text x="1050" y="918" class="s">2. Release S1. Wait for the blue LED on all four drives,</text>
+  <text x="1066" y="936" class="s">then 1-2 s more.</text>
+  <text x="1050" y="958" class="s b red">3. Put the gizmo at its zero pose by hand: yaw straight</text>
+  <text x="1066" y="976" class="s b red">ahead, pitch level. Keep it there until step 4 is done;</text>
+  <text x="1066" y="994" class="s b red">the idle pitch can sag under its own weight.</text>
+  <text x="1050" y="1016" class="s">4. Restart the robot software: Ctrl-C and start again, or</text>
+  <text x="1066" y="1034" class="s">sudo systemctl restart iot-robot. The pose at start</text>
+  <text x="1066" y="1052" class="s">becomes the gizmo's new zero.</text>
+  <text x="1050" y="1074" class="s">5. Release the E-stop on the web page, then start the</text>
+  <text x="1066" y="1092" class="s">follower or teleop, only when the robot may move.</text>
 
-  <path class="ctl" d="M1080 760 V860 H1115"/>
-  <!-- F4 coil-loop fuse, holder at J1 -->
-  <rect class="sym" x="1071" y="782" width="18" height="40" rx="3"/>
-  <line x1="1080" y1="782" x2="1080" y2="822" stroke="#333" stroke-width="2"/>
-  <text x="1096" y="807" class="s b">F4 1 A</text>
-  <circle class="term" cx="1120" cy="860" r="5"/>
-  <circle class="term" cx="1200" cy="860" r="5"/>
-  <line x1="1114" y1="867" x2="1206" y2="867" stroke="#333" stroke-width="4"/>
-  <line x1="1160" y1="867" x2="1160" y2="832" stroke="#333" stroke-width="2" stroke-dasharray="4 3"/>
-  <path d="M1144 832 A16 16 0 0 1 1176 832 Z" fill="#d32f2f" stroke="#7f0000" stroke-width="1.5"/>
-  <text x="1184" y="830" class="s b">S1 E-stop</text>
-  <path class="ctl" d="M1205 860 H1270"/>
-  <rect class="sym" x="1270" y="846" width="60" height="28"/>
-  <text x="1300" y="865" class="s b" text-anchor="middle">K1</text>
-  <path class="ctl" d="M1330 860 H1460 V930" style="stroke:#212121"/>
-  <circle cx="1245" cy="860" r="4" fill="#c62828"/>
-  <circle cx="1355" cy="860" r="4" fill="#212121"/>
-  <path class="wire" d="M1245 860 V910 H1290"/>
-  <path class="wire" d="M1315 910 H1355 V860"/>
-  <line x1="1290" y1="900" x2="1290" y2="920" stroke="#333" stroke-width="3"/>
-  <polygon points="1290,910 1315,900 1315,920" fill="#333"/>
-  <text x="1302" y="940" class="s b" text-anchor="middle">D1</text>
-  <line x1="1444" y1="930" x2="1476" y2="930" stroke="#333" stroke-width="2.5"/>
-  <line x1="1450" y1="936" x2="1470" y2="936" stroke="#333" stroke-width="2.5"/>
-  <line x1="1456" y1="942" x2="1464" y2="942" stroke="#333" stroke-width="2.5"/>
-  <text x="1480" y="938" class="s">0 V</text>
-
-  <text x="1050" y="980" class="s">- F4: 1 A fuse, holder at J1, protects the 22 AWG coil wiring.</text>
-  <text x="1050" y="998" class="s">- S1: E-stop NC contact. It now switches only the coil current.</text>
-  <text x="1050" y="1016" class="s">- K1: relay or contactor, 24 V coil, contacts 20 A DC or more.</text>
-  <text x="1050" y="1034" class="s">- D1: 1N4007 across the coil, stripe (cathode) to the + side.</text>
-  <text x="1050" y="1052" class="s">- Press S1: K1 drops out, the motor bus goes dead and the</text>
-  <text x="1061" y="1070" class="s">wheels coast. The Pi and the Nucleo stay on.</text>
-  <text x="1050" y="1088" class="s b" fill="#b71c1c">- On release the drivers reboot and wait. Stop follower and</text>
-  <text x="1061" y="1106" class="s b" fill="#b71c1c">teleop, then restart the robot software to drive again.</text>
-  <text x="1050" y="1124" class="s">- Closing the motor bus charges the drivers' input capacitors:</text>
-  <text x="1061" y="1142" class="s">expect a small spark at the XT30 or the contact.</text>
+  <text x="1050" y="1124" class="s">S1 contact: 10 A DC or more. If it is rated lower, switch the</text>
+  <text x="1050" y="1142" class="s">motors through a relay: option C in docs/wiring.md.</text>
 </svg>

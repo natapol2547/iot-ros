@@ -11,21 +11,26 @@ The whole ROS environment is managed by [pixi](https://pixi.sh) using
 
 | Part | Details |
 | --- | --- |
-| Computer | Raspberry Pi, running the `robot` pixi environment |
-| Drive | 2 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) on a 1 Mbit/s CAN bus through a USB-CAN adapter |
-| Camera | Raspberry Pi Camera v2.1 (IMX219, 62.2° × 48.8° FOV) on a pan/tilt "gizmo" |
-| Range | 2 × HC-SR04 ultrasonic sensors angled ±45° forward, read by a Nucleo-F401RE (STM32) over USB serial |
-| Power | 6S LiPo (24 V nominal) for the motors, 5 V buck converter for the Pi |
-| IMU | LSM9DS1, not used by the software yet |
+| Computer | Raspberry Pi 4 Model B, running the `robot` pixi environment |
+| Motors | 4 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) on a 1 Mbit/s CAN bus through a native SocketCAN USB-CAN adapter: the two wheels (CAN IDs 10 and 11) and the gizmo's yaw and pitch (12 and 13), set in [`motors.yaml`](src/iot_robot_bringup/config/motors.yaml) |
+| Camera | Raspberry Pi Camera v2.1 (IMX219, 62.2° × 48.8° FOV) on the pan/tilt "gizmo" |
+| Range | 2 × HC-SR04P ultrasonic sensors angled ±45° forward, read by a Nucleo-F401RE (STM32) over USB serial |
+| IMU | LSM9DS1 on the Pi's I2C bus |
+| Power | 6S LiPo (24 V nominal) with an XT60 plug and a main switch; an E-stop cuts power to the motors; 5.1 V buck converter for the Pi |
 
 There is no lidar, so Nav2 is not used. Following is done with visual servoing.
 
 Everything about the real robot is in [docs/](docs/):
 
+- [docs/todo.md](docs/todo.md): the one-time setup, in order: wiring, motor settings, Pi,
+  Nucleo, IMU and the first power-on.
+- [docs/checklist.md](docs/checklist.md): the checklist for every session. The gizmo motors
+  forget their position at power-off, so the gizmo has to be at its zero pose whenever the
+  robot software starts.
 - [docs/wiring.md](docs/wiring.md): connection diagrams, parts list, fuses, CAN termination,
-  the Nucleo pinout and a safety checklist before the first power-on.
-- [docs/hardware.md](docs/hardware.md): Raspberry Pi setup, motor configuration, how the wheels
-  are stopped, the first power-on checklist and troubleshooting.
+  the Nucleo and IMU pinouts and a safety checklist before the first power-on.
+- [docs/hardware.md](docs/hardware.md): Raspberry Pi setup, motor configuration, the gizmo, the
+  IMU, how the motors are stopped and troubleshooting.
 - [docs/web.md](docs/web.md): the browser controller.
 - [deploy/README.md](deploy/README.md): the systemd service, udev rule and CAN setup installed
   on the Pi.
@@ -109,11 +114,13 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `bridge` | STM32 bridge on its own (`/ultrasonic/*`, `/battery_state`) |
 | `fake-stm32` | A fake Nucleo on a pseudo-terminal, for testing without the board (`--fault left` fakes an unplugged sensor) |
 | `can-up` | Brings `can0` up at 1 Mbit/s by hand |
-| `can-check` | Checks that `can0` is up and both motors send status frames |
+| `can-check` | Checks that `can0` is up and every motor in `motors.yaml` sends status frames |
+| `can-identify` | Moves one motor at a time a few degrees and asks which joint moved, to find which CAN ID is which joint; `--write` saves the answer to `motors.yaml` |
+| `can-watch` | Live position, speed, current, temperature and fault of every motor, labelled with its joint |
 | `robot` | `robot` environment only: the full real-robot launch |
 
 `scripts/activate.sh` sources `install/setup.bash` on every `pixi run`, so built packages are
-always on the path.
+always on the path. It skips a build made with the other pixi environment and says to rebuild.
 
 ### Pixi environments
 
@@ -137,11 +144,11 @@ src/
 ├── iot_robot_perception    ball_detector, person_detector (ament_python)
 ├── iot_robot_behavior      target_follower, follow launches, shared twist_mux config (ament_python)
 ├── iot_robot_web           browser controller: aiohttp server, WebSocket, MJPEG stream (ament_python)
-├── iot_robot_drivers       stm32_bridge, fake_stm32, cubemars_tool (ament_python)
-├── iot_robot_bringup       robot.launch.py, real-robot URDF wrapper, controllers, camera config (ament_cmake)
+├── iot_robot_drivers       stm32_bridge, fake_stm32, cubemars_tool, fake_cubemars, lsm9ds1_node (ament_python)
+├── iot_robot_bringup       robot.launch.py, imu.launch.py, real-robot URDF wrapper, motors.yaml, controllers, camera config (ament_cmake)
 └── external
     ├── cubemars_hardware       upstream CubeMars ros2_control plugin (git submodule)
-    └── cubemars_hardware_safe  subclass that stops the wheels on faults, silence and shutdown
+    └── cubemars_hardware_safe  subclass that stops the motors on faults, silence and shutdown, and zeroes the gizmo
 ```
 
 `iot_robot_mujoco/urdf/iot_robot_sim.urdf.xacro` includes the description and adds the MuJoCo
@@ -168,7 +175,13 @@ web_controller ─────────► /cmd_vel/web ───────
                                    twist_mux ──► /diff_drive_controller/cmd_vel
 
 stm32_bridge (robot) or scan_to_range (sim) ──► /ultrasonic/left, /ultrasonic/right
+
+lsm9ds1_node (robot) ──► /imu/data_raw, /imu/mag ──► imu_filter_madgwick ──► /imu/data
 ```
+
+`/gizmo_controller/commands` (from the follower or the web page's camera aim) goes to a
+`gizmo_controller` in both cases: in the sim it moves the MuJoCo joints, on the robot it is a
+`position_controllers/JointGroupPositionController` that drives the two gizmo motors over CAN.
 
 twist_mux gives teleop priority 100 (timeout 1.0 s) over the web page's 90 and the follower's
 10 (timeout 0.5 s). Pressing a teleop key overrides the follower for the wheels, and control
@@ -187,6 +200,9 @@ Other useful topics and services:
 - `/person_detector/enroll`, `/person_detector/forget` (`std_srvs/srv/Trigger`)
 - `/person/status`: the person detector's status line (enrolled, following, searching)
 - `/battery_state`: pack voltage, when the firmware is built with battery sensing (robot only)
+- `/imu/data_raw` (`sensor_msgs/Imu`, angular rates and accelerations in `imu_link`),
+  `/imu/mag` (`sensor_msgs/MagneticField`, tesla) and `/imu/data` (the same with an orientation
+  from `imu_filter_madgwick`), at about 100 Hz (robot only)
 - `/joint_states`: wheel and gizmo joint positions
 - `/diff_drive_controller/odom` and the `odom → base_footprint` TF
 - `/simulator/floating_base_state`: ground-truth robot pose from MuJoCo (sim only)
@@ -226,11 +242,17 @@ Other useful topics and services:
   - [x] Software: `robot.launch.py`, the CubeMars plugin with safe stops (tested on a virtual CAN
         bus with fake motors), the STM32 bridge (tested against a fake board), camera config,
         systemd service, `robot` pixi environment
+  - [x] Gizmo on two AK45-10 motors in position mode: `gizmo_controller`, clamp and slew to the
+        URDF limits, zero on start, stall guard (tested against fake motors on a virtual CAN bus)
+  - [x] `motors.yaml` as the one place for CAN IDs and directions; `can-check`, `can-identify`
+        and `can-watch`
+  - [x] LSM9DS1 IMU driver and `imu_filter_madgwick` (tested against a simulated chip)
   - [x] Nucleo firmware ([iot-stm32](https://github.com/natapol2547/iot-stm32)), host-tested
   - [x] Wiring diagrams and parts list ([docs/wiring.md](docs/wiring.md))
-  - [ ] Wire it up and run the first power-on checklist in [docs/hardware.md](docs/hardware.md)
-  - [ ] Calibrate motor directions, `pole_pairs`, wheel radius and separation on the real robot
-  - [ ] IMU (LSM9DS1)
+  - [ ] Wire it up and work through the one-time setup in [docs/todo.md](docs/todo.md): R-Link
+        settings, which motor is which ID, directions, gizmo zero pose, IMU pose
+  - [ ] Check `pole_pairs`, the stall guard, wheel radius and separation on the real robot
+  - [ ] Battery capacity (TBD)
 
 ## Perception
 
@@ -278,7 +300,8 @@ estimate against the depth camera. The error is below 1.5 % from 0.95 m to 3.7 m
 - **Accuracy:** after webcam calibration, distances at 1, 2 and 3 m matched a tape measure with
   the default `torso_ratio` of 0.29.
 - **Speed:** about 6–8 Hz on the development laptop while the simulation is running. The
-  Ultralytics Pi 5 benchmark suggests roughly 10 Hz at 320 px. This still needs to be measured.
+  Ultralytics Pi 5 benchmark suggests roughly 10 Hz at 320 px; the robot's Pi 4 will be slower.
+  This still needs to be measured.
 
 #### Exporting the model
 
@@ -469,6 +492,8 @@ These cost real debugging time. Check here first when something similar breaks.
   them by stamp in the depth callback.
 - URDF joint velocity limits are only enforced when `enforce_command_limits: true` is set on
   `controller_manager`. To slow the gizmo down, lower `velocity` on the gizmo joints in the URDF.
+  On the real robot the CubeMars plugin applies the same limit itself (see
+  [The gizmo](docs/hardware.md#the-gizmo)).
 - YOLO does not recognise every simple shape as a person. A first mannequin made of a few blobby
   capsules scored 0.02 at 1.5 m. Separate shoulders, a boxy torso, hips, sleeves and hair raised
   that to 0.7–0.9 when facing or turned 45°. Side-on (90°) it is still not detected.
@@ -524,28 +549,45 @@ These cost real debugging time. Check here first when something similar breaks.
 ## Real hardware (Step 8)
 
 The full guide is [docs/hardware.md](docs/hardware.md); wiring is in
-[docs/wiring.md](docs/wiring.md). In short:
+[docs/wiring.md](docs/wiring.md). The one-time setup is [docs/todo.md](docs/todo.md) and the
+routine for every session is [docs/checklist.md](docs/checklist.md). In short:
 
 ```bash
 # On the Pi, once
 pixi install -e robot --locked
 pixi run -e robot build
-sudo deploy/install.sh        # udev rule for /dev/stm32, can0 at boot, iot-robot.service
+sudo deploy/install.sh        # udev rule for /dev/stm32, can0 at boot, I2C, iot-robot.service
 
 # Then
-pixi run -e robot can-check   # both motors answer on can0
-pixi run -e robot robot       # everything; the web page is on http://<pi>.local:8080
+pixi run -e robot can-check      # every motor in motors.yaml answers on can0
+pixi run -e robot can-identify   # which motor is which CAN ID (once; service stopped)
+pixi run -e robot robot          # everything; the web page is on http://<pi>.local:8080
 ```
 
 - **Motors:** [cubemars_hardware](https://github.com/OpenFieldAutomation-OFA/cubemars_hardware)
-  (submodule) wrapped by `cubemars_hardware_safe`. The wrapper stops both wheels (zero speed for
-  300 ms, then release) when the hardware is deactivated or shut down, when a motor reports a
-  fault, and when a motor sends no status for 100 ms. `robot.launch.py` sends the same stop if
+  (submodule) wrapped by `cubemars_hardware_safe`. The CAN ID and direction of each joint's
+  motor are in [`motors.yaml`](src/iot_robot_bringup/config/motors.yaml); the file takes effect
+  at the next start, without a rebuild. The wheels (`WheelSystem`) and the gizmo
+  (`GizmoSystem`) are two `ros2_control` hardware components that stop independently. The
+  wrapper stops a component's motors (zero speed for 300 ms, then release) when it is
+  deactivated or shut down, when one of its motors reports a fault or sends no status for
+  100 ms, and when a gizmo motor stalls. `robot.launch.py` sends the same stop if
   `ros2_control_node` exits for any reason, and the systemd service runs `cubemars_tool stop`
   after every stop. After a fault, a silent motor or the hardware E-stop, the stop is latched
   until the robot is restarted. The motors' own CAN timeout must also be set in R-Link; it is
   the only stop if the Pi or the CAN link dies. `send_can_status` must be enabled there too,
   and servo-mode speed is in electrical RPM, so `pole_pairs` needs checking.
+- **Gizmo:** `gizmo_controller` holds the yaw and pitch at the commanded position, clamped to
+  the URDF limits and at most 1 rad/s. The motors forget their position at power-off, so each
+  start of the robot software takes the gizmo's pose at that moment as yaw 0 and pitch 0
+  (camera straight ahead and level). Put the gizmo there before every start, including the
+  restart after the hardware E-stop ([docs/checklist.md](docs/checklist.md)).
+  `gizmo_mode:=fixed` leaves the gizmo motors undriven.
+- **IMU:** `lsm9ds1_node` reads the LSM9DS1 on the Pi's I2C bus 1 and publishes
+  `/imu/data_raw` and `/imu/mag`; `imu_filter_madgwick` adds the orientation on `/imu/data`.
+  `robot.launch.py` starts both (`imu:=false` leaves them out); a missing sensor only logs a
+  warning and is retried. The pose of `imu_link` in the URDF is a placeholder until it is measured
+  ([docs/todo.md](docs/todo.md#5-imu)).
 - **E-stop:** the real robot starts with the web E-stop engaged (`start_estopped:=true`), so it
   never drives after a restart until someone releases the stop on the page. The hardware E-stop
   only cuts motor power, and ROS can't see it directly; see the recovery order in
@@ -568,4 +610,5 @@ pixi run -e robot robot       # everything; the web page is on http://<pi>.local
 - **Meshes:** the wheel STL meshes are 5.34 mm off-centre in local X. This is corrected with
   the URDF visual origin.
 - **Model format on the Pi:** start with ONNX at 320. Try NCNN if it is too slow; Ultralytics
-  benchmarks it about 2× faster on a Pi 5, but it needs a separate NMS step.
+  benchmarks it about 2× faster on a Pi 5 (the robot has a Pi 4), but it needs a separate NMS
+  step.
