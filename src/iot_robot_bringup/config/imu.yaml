@@ -1,0 +1,61 @@
+# LSM9DS1 IMU on the Raspberry Pi's I2C bus, and the Madgwick filter that estimates its
+# orientation. Loaded by imu.launch.py.
+#
+# Topics: imu/data_raw (rates and accelerations), imu/mag (tesla), imu/data (with
+# orientation). All in the frame imu_link, which iot_robot_description places on base_link.
+
+lsm9ds1:
+  ros__parameters:
+    # /dev/i2c-1: header pins 3 (SDA) and 5 (SCL)
+    bus: 1
+    # 7-bit addresses: 0x6B (107) or 0x6A (106), and 0x1E (30) or 0x1C (28), set by the
+    # SDO_AG and SDO_M pins; most breakout boards use the upper ones
+    ag_address: 0x6B
+    mag_address: 0x1E
+    # Polling and publishing rate, Hz. Keep it at or below odr. rate, odr and the other
+    # decimal parameters are doubles: write 50.0, not 50, or the node exits with a type error
+    rate: 100.0
+    # Accelerometer and gyroscope output data rate, Hz: 59.5, 119.0, 238.0, 476.0 or 952.0
+    odr: 119.0
+    # Full scales: accelerometer 2, 4, 8 or 16 g; gyroscope 245, 500 or 2000 dps;
+    # magnetometer 4, 8, 12 or 16 gauss. Smaller ranges give finer resolution
+    accel_range: 4
+    gyro_range: 500
+    mag_range: 4
+    frame_id: imu_link
+    # Standard deviations for the message covariances. Estimates, not measured: record
+    # imu/data_raw with the robot standing still and use the standard deviation of each
+    # axis. 0.0 means unknown
+    linear_acceleration_stddev: 0.03   # m/s^2
+    angular_velocity_stddev: 0.005     # rad/s
+    magnetic_field_stddev: 0.0         # T
+    # Gyroscope bias from this many samples taken while the robot stands still at
+    # start-up; imu/data_raw starts after that. 0 disables the estimate
+    gyro_bias_samples: 100
+    # Largest deviation from the window mean that still counts as standing still, rad/s
+    gyro_bias_tolerance: 0.05
+    # Seconds between attempts to open a missing or failed device
+    reconnect_period: 1.0
+    # Reinitialise the sensor when it produces no new sample for this long, s
+    stale_timeout: 0.5
+
+imu_filter:
+  ros__parameters:
+    # Without the magnetometer: the motors and the battery current disturb it, and it
+    # needs a hard- and soft-iron calibration first (mag_bias_x/y/z). Yaw therefore
+    # starts at zero and drifts slowly; roll and pitch are referenced to gravity
+    use_mag: false
+    world_frame: enu
+    # robot_state_publisher and odometry own the TF tree; imu/data carries the result
+    publish_tf: false
+    fixed_frame: odom
+    stateless: false
+    # 0.0: use the message stamps for the time step
+    constant_dt: 0.0
+    # Filter gain: higher follows the accelerometer faster but passes more vibration
+    gain: 0.1
+    zeta: 0.0
+    remove_gravity_vector: false
+    # 0.0: the orientation covariance is published as unknown
+    orientation_stddev: 0.0
+    publish_debug_topics: false

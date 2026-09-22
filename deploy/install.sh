@@ -9,7 +9,9 @@
 #   /etc/systemd/network/80-iot-robot-can0.network  can0 at 1 Mbit/s via systemd-networkd
 #   /etc/systemd/system/iot-robot.service           robot.launch.py at boot
 #   /etc/default/iot-robot                          launch arguments (kept if present)
-# and adds the user to the dialout (serial) and video (camera) groups.
+# enables the I2C bus of a Raspberry Pi for the LSM9DS1 IMU (raspi-config), and adds the
+# user to the dialout (serial), video (camera) and i2c (IMU) groups. Running it again is
+# safe; on a machine that is not a Raspberry Pi the I2C step is skipped.
 #
 # Build the robot environment first (`pixi install -e robot --locked` and
 # `pixi run -e robot build`); see docs/hardware.md.
@@ -35,7 +37,7 @@ Usage: sudo $0 [--user NAME] [--pixi PATH] [--no-apt] [--no-enable] [--uninstall
 
   --user NAME   Account that owns the checkout and runs the robot (default: \$SUDO_USER)
   --pixi PATH   pixi executable (default: ~NAME/.pixi/bin/pixi, then NAME's PATH)
-  --no-apt      Do not apt-get install can-utils
+  --no-apt      Do not apt-get install can-utils and i2c-tools
   --no-enable   Install the service but do not enable it at boot
   --uninstall   Remove the files above and disable the service
 EOF
@@ -65,7 +67,8 @@ if [ "$uninstall" -eq 1 ]; then
   udevadm control --reload-rules
   networkctl reload 2>/dev/null || true
   echo "Removed the service, udev rule and CAN network file."
-  echo "Left in place: $env_file, group memberships, can-utils and systemd-networkd."
+  echo "Left in place: $env_file, group memberships, the I2C setting, can-utils,"
+  echo "i2c-tools and systemd-networkd."
   exit 0
 fi
 
@@ -96,9 +99,43 @@ step() {
 }
 
 if [ "$use_apt" -eq 1 ]; then
-  # candump/cansend for debugging the bus; slcand for slcan adapters
-  step "Installing can-utils"
-  apt-get install -y can-utils
+  # candump/cansend for debugging the bus; slcand for slcan adapters. i2cdetect for
+  # finding the IMU; the Debian package also creates the i2c group and its udev rule
+  step "Installing can-utils and i2c-tools"
+  apt-get install -y can-utils i2c-tools
+fi
+
+# The LSM9DS1 IMU is on I2C bus 1 (header pins 3 and 5), which is off by default
+i2c_note=""
+if ! grep -qas "Raspberry Pi" /proc/device-tree/model; then
+  step "Not a Raspberry Pi: skipping the I2C setup"
+elif [ -n "${DESTDIR:-}" ]; then
+  step "DESTDIR is set: skipping the I2C setup, which changes the boot configuration"
+elif command -v raspi-config >/dev/null 2>&1; then
+  # get_i2c prints 0 when dtparam=i2c_arm=on is in config.txt. That line alone does not
+  # create /dev/i2c-1 (the i2c-dev module does), so a missing device node also triggers
+  # do_i2c, which is safe to repeat
+  if [ "$(raspi-config nonint get_i2c)" = "0" ] && [ -e /dev/i2c-1 ]; then
+    step "I2C is already enabled"
+  else
+    # Sets dtparam=i2c_arm=on in config.txt, adds i2c-dev to /etc/modules and applies
+    # both now
+    step "Enabling I2C with raspi-config"
+    raspi-config nonint do_i2c 0
+    udevadm settle --timeout=5 || true
+  fi
+  if [ ! -e /dev/i2c-1 ]; then
+    i2c_note="Reboot to finish enabling I2C: /dev/i2c-1 does not exist yet."
+  fi
+elif [ -e /dev/i2c-1 ]; then
+  step "raspi-config not found, but /dev/i2c-1 exists: I2C is already enabled"
+else
+  step "raspi-config not found: enable I2C by hand"
+  cat <<EOF
+    Add the line "dtparam=i2c_arm=on" to /boot/firmware/config.txt (/boot/config.txt on
+    older images), add "i2c-dev" to /etc/modules, and reboot.
+EOF
+  i2c_note="Enable I2C as described above, then reboot."
 fi
 
 step "Installing udev rule for /dev/stm32"
@@ -117,8 +154,13 @@ if systemctl is-active --quiet NetworkManager; then
 fi
 systemctl restart systemd-networkd.service
 
-step "Adding $user to the dialout and video groups"
-usermod -aG dialout,video "$user"
+# /dev/i2c-* belongs to the i2c group on Raspberry Pi OS and with Debian's i2c-tools
+groups="dialout,video"
+if getent group i2c >/dev/null; then
+  groups="$groups,i2c"
+fi
+step "Adding $user to the groups ${groups//,/, }"
+usermod -aG "$groups" "$user"
 
 step "Installing iot-robot.service (user $user, checkout $repo)"
 mkdir -p "$(dirname "$service_file")"
@@ -140,8 +182,12 @@ cat <<EOF
 Done.
   CAN link:      ip -details link show can0    (appears once the adapter is plugged in)
   STM32:         ls -l /dev/stm32
+  IMU:           i2cdetect -y 1                (expect 1e and 6b in the table)
   Start now:     sudo systemctl start iot-robot
   Logs:          journalctl -u iot-robot -f
   Settings:      $env_file
 Log out and back in for the new group memberships to apply to your own shell.
 EOF
+if [ -n "$i2c_note" ]; then
+  echo "$i2c_note"
+fi

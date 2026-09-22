@@ -206,4 +206,19 @@
         <child link="ultrasonic_right_link" />
     </joint>
 
+    <!-- LSM9DS1 IMU. imu_link has the magnetometer's axes, the right-handed set that
+         lsm9ds1_node reports in (iot_robot_drivers/lsm9ds1.py): seen from above with the
+         chip's pin 1 dot at the top left, x points left, y down the page and z up out of it.
+         PLACEHOLDER POSE: measure where the chip sits relative to base_link and how it is
+         turned, then set xyz and rpy. To check the rotation, stand the robot level: the
+         imu_link axis pointing up reads about +9.8 m/s^2 in imu/data_raw, and turning the
+         robot to the left gives a positive angular velocity about that same axis. With
+         rpy 0 0 0 both must show on z -->
+    <link name="imu_link" />
+    <joint name="imu_joint" type="fixed">
+        <origin xyz="0 0 0.05" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="imu_link" />
+    </joint>
+
 </robot>
