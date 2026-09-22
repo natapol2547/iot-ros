@@ -126,7 +126,8 @@ class TargetFollower(Node):
         # Only drive forward once roughly facing the target
         heading_scale = max(0.0, math.cos(bearing))
         cmd.twist.linear.x = heading_scale * clamp(
-            self.linear_gain * (distance - self.follow_distance), -self.max_linear, self.max_linear)
+            self.linear_gain * (distance - self.follow_distance),
+            -self.max_linear, self.max_linear)
         self.cmd_vel_pub.publish(cmd)
 
 
