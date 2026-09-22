@@ -64,14 +64,20 @@ def fake_args():
 
 
 @pytest.fixture
-def ros(tmp_path, fake_args):
+def gizmo_mode():
+    """The bridge's gizmo_mode; a test overrides this with pytest.mark.parametrize."""
+    return "servo"
+
+
+@pytest.fixture
+def ros(tmp_path, fake_args, gizmo_mode):
     link = str(tmp_path / "stm32")
     fake = FakeStm32(link, *fake_args)
     context = rclpy.context.Context()
     rclpy.init(context=context)
     bridge = Stm32Bridge(context=context, parameter_overrides=[
         Parameter("port", value=link),
-        Parameter("gizmo_mode", value="servo"),
+        Parameter("gizmo_mode", value=gizmo_mode),
         Parameter("reconnect_period", value=0.2),
     ])
     probe = rclpy.create_node("probe", context=context)
@@ -183,3 +189,42 @@ def test_reported_sensor_fault_publishes_nan_until_recovery(ros):
     ranges["left"].clear()
     wait_for(lambda: len(ranges["left"]) >= 3, 5.0, "no readings after the banner", spin)
     assert all(math.isinf(m.range) for m in ranges["left"])
+
+
+def spin_for(spin, seconds):
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        spin()
+
+
+@pytest.mark.parametrize("gizmo_mode", ["can"])
+def test_can_mode_leaves_the_gizmo_to_ros2_control(ros):
+    probe, spin, fake = ros["probe"], ros["spin"], ros["fake"]
+    ranges, joints = [], []
+    probe.create_subscription(Range, "/ultrasonic/left", ranges.append, 10)
+    probe.create_subscription(JointState, "/joint_states", joints.append, 10)
+    commands = probe.create_publisher(Float64MultiArray, "/gizmo_controller/commands", 10)
+    wait_for(lambda: len(ranges) >= 3, 10.0, "no ranges in can mode", spin)
+
+    # joint_state_broadcaster owns the gizmo joints and gizmo_controller their commands
+    assert probe.count_publishers("/joint_states") == 0
+    assert probe.count_subscribers("/gizmo_controller/commands") == 0
+    commands.publish(Float64MultiArray(data=[0.5, -0.3]))
+    spin_for(spin, 0.5)
+    assert joints == []
+    assert fake.commands() == []
+
+
+@pytest.mark.parametrize("gizmo_mode", ["fixed"])
+def test_fixed_mode_publishes_a_constant_pose_and_ignores_commands(ros):
+    probe, spin, fake = ros["probe"], ros["spin"], ros["fake"]
+    joints = []
+    probe.create_subscription(JointState, "/joint_states", joints.append, 10)
+    commands = probe.create_publisher(Float64MultiArray, "/gizmo_controller/commands", 10)
+    wait_for(lambda: len(joints) >= 3, 10.0, "no gizmo joint states in fixed mode", spin)
+
+    commands.publish(Float64MultiArray(data=[0.5, -0.3]))
+    spin_for(spin, 0.5)
+    assert list(joints[-1].name) == ["gizmo_yaw_joint", "gizmo_pitch_joint"]
+    assert list(joints[-1].position) == [0.0, 0.0]
+    assert fake.commands() == []

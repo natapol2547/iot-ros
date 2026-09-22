@@ -11,13 +11,14 @@ import os
 import socket
 import struct
 import threading
+import time
 
 import pytest
 
 from iot_robot_drivers import cubemars_tool
 from iot_robot_drivers.cubemars import (
     CanBus, CanCheckError, Status, check_interface, decode_status, encode_release,
-    encode_speed, erpm_per_rad_s, preflight, stop_motors, wait_for_status)
+    encode_speed, erpm_per_rad_s, listen, preflight, stop_motors, wait_for_status)
 
 
 def status_frame(can_id, position=0, speed=0, current=0, temperature=30, error=0):
@@ -128,8 +129,21 @@ class TestBus:
                 preflight(CAN_INTERFACE, [1, 2], timeout=0.5)
         finally:
             motors.stop()
-        assert "CAN ID(s) 2" in str(err.value)
-        assert "unexpected CAN ID(s) 3" in str(err.value)
+        assert "No status frames from CAN ID 2 " in str(err.value)
+        assert "CAN ID 3 (not in motors.yaml)" in str(err.value)
+        assert "can-identify" in str(err.value)
+
+    def test_preflight_labels_motors_with_their_joints(self):
+        motors = FakeMotors(CAN_INTERFACE, [10, 12])
+        names = {10: "wheel_joint_left", 11: "wheel_joint_right", 12: "gizmo_yaw_joint"}
+        try:
+            with pytest.raises(CanCheckError) as err:
+                preflight(CAN_INTERFACE, [10, 11], timeout=0.5, names=names)
+        finally:
+            motors.stop()
+        # A motors.yaml motor that is not in use is named, not called unexpected
+        assert "from wheel_joint_right (CAN ID 11) on" in str(err.value)
+        assert "heard from gizmo_yaw_joint (CAN ID 12)." in str(err.value)
 
     def test_preflight_reports_motor_faults(self):
         motors = FakeMotors(CAN_INTERFACE, [1, 2], error=4)
@@ -138,6 +152,22 @@ class TestBus:
                 preflight(CAN_INTERFACE, [1, 2], timeout=1.0)
         finally:
             motors.stop()
+
+    def test_listen_sees_another_programs_commands(self):
+        heard = {}
+
+        def run():
+            heard["result"] = listen(CAN_INTERFACE, 0.5, status_only=False)
+        listener = threading.Thread(target=run)
+        listener.start()
+        with CanBus(CAN_INTERFACE) as other:
+            for _ in range(10):
+                other.send(*encode_speed(10, 0))
+                other.send(*status_frame(11))
+                time.sleep(0.02)
+        listener.join()
+        assert heard["result"].commanded == {10}
+        assert sorted(heard["result"].status) == [11]
 
     def test_speed_commands_reach_the_bus(self):
         with CanBus(CAN_INTERFACE) as listener, CanBus(CAN_INTERFACE) as sender:

@@ -4,9 +4,10 @@
     <name>cubemars_hardware_safe</name>
     <version>0.1.0</version>
     <description>
-        Safety layer for the upstream cubemars_hardware ros2_control plugin: stops the
-        motors whenever the hardware component stops, and stops both wheels when a motor
-        reports a fault or goes silent.
+        Safety layer for the upstream cubemars_hardware ros2_control plugin: stops every
+        motor of the component whenever the component stops or a motor reports a fault,
+        goes silent or stalls; adds a per-joint direction, clamps and slew-limits position
+        commands to the URDF limits and can zero single-encoder motors on activation.
     </description>
     <maintainer email="contact@findmy3d.com">tawan</maintainer>
     <license>Apache-2.0</license>
@@ -15,9 +16,11 @@
 
     <depend>cubemars_hardware</depend>
     <depend>hardware_interface</depend>
+    <depend>joint_limits</depend>
     <depend>pluginlib</depend>
     <depend>rclcpp</depend>
     <depend>rclcpp_lifecycle</depend>
+    <depend>urdf</depend>
 
     <export>
         <build_type>ament_cmake</build_type>

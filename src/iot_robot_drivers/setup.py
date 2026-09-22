@@ -17,13 +17,16 @@ setup(
     zip_safe=True,
     maintainer="tawan",
     maintainer_email="contact@findmy3d.com",
-    description="Drivers for the real iot_robot: STM32 sensor bridge and CubeMars CAN tools.",
+    description="Drivers for the real iot_robot: STM32 sensor bridge, CubeMars CAN tools "
+                "and the LSM9DS1 IMU.",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
             "stm32_bridge = iot_robot_drivers.stm32_bridge:main",
             "fake_stm32 = iot_robot_drivers.fake_stm32:main",
             "cubemars_tool = iot_robot_drivers.cubemars_tool:main",
+            "fake_cubemars = iot_robot_drivers.fake_cubemars:main",
+            "lsm9ds1_node = iot_robot_drivers.lsm9ds1_node:main",
         ],
     },
 )

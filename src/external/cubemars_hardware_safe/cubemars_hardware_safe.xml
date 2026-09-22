@@ -3,8 +3,9 @@
          type="cubemars_hardware_safe::SafeCubeMarsSystemHardware"
          base_class_type="hardware_interface::SystemInterface">
     <description>
-      cubemars_hardware/CubeMarsSystemHardware plus stop-on-exit and a motor fault and
-      status watchdog that stops both wheels.
+      cubemars_hardware/CubeMarsSystemHardware plus stop-on-exit, a fault, silence and
+      stall watchdog that stops every motor of the component, a per-joint direction,
+      position clamping and slew limiting, and zeroing on activation.
     </description>
   </class>
 </library>

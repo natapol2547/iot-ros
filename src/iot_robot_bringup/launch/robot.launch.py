@@ -1,22 +1,38 @@
-"""Bring up the real iot_robot: wheel motors over CAN, camera, STM32 sensor board, web UI.
+"""Bring up the real iot_robot: CubeMars motors over CAN, camera, STM32 sensor board, IMU, web UI.
 
-    ros2 launch iot_robot_bringup robot.launch.py                    # real hardware
+    ros2 launch iot_robot_bringup robot.launch.py                     # real hardware
+    ros2 launch iot_robot_bringup robot.launch.py gizmo_mode:=fixed   # wheels only
     ros2 launch iot_robot_bringup robot.launch.py mock:=true camera:=false
 
-Unless mock:=true, the CAN link and both motors are checked before anything starts. If
-either is missing the launch exits with instructions, instead of starting a controller
-that never moves the wheels.
+The motor CAN IDs and directions come from motors.yaml (config/motors.yaml, or
+motors:=PATH), which is checked before anything starts. Unless mock:=true, the CAN link
+and every motor in use (the wheels, plus the gizmo motors in gizmo_mode can) are checked
+too. If one is missing the launch exits with instructions, instead of starting a
+controller that never moves it.
 
-Stopping the wheels does not depend on a clean shutdown alone: the motor plugin
+The motors cannot remember their position over a power cycle. In gizmo_mode can, the
+pose the gizmo is in when the robot starts therefore becomes its zero (zero_on_start in
+motors.yaml): put the gizmo at its zero pose before starting (docs/checklist.md).
+
+The LSM9DS1 IMU (imu.launch.py, imu:=true) never holds up or stops the robot: its node
+retries by itself when the sensor is missing, and environments without the IMU packages
+(the laptop) skip it with a message.
+
+Stopping the motors does not depend on a clean shutdown alone: the motor plugin
 (cubemars_hardware_safe) stops them when it is deactivated or sees a motor fault, this
-file sends the same stop frames whenever ros2_control_node exits for any reason
-(including a crash or SIGKILL), and the motors' own CAN timeout covers the rest.
+file sends the same stop frames to every motor in use whenever ros2_control_node exits
+for any reason (including a crash or SIGKILL), and the motors' own CAN timeout covers
+the rest.
 """
 
+import importlib.util
 import os
+import shlex
 import shutil
 
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
+from iot_robot_drivers import motor_config
+from iot_robot_drivers.cubemars import CanBus, CanCheckError, describe, preflight, stop_motors
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction,
@@ -32,6 +48,9 @@ from launch_ros.substitutions import FindPackageShare
 # camera_calibration's "commit" writes here, outside the install space
 CAMERA_INFO = os.path.expanduser("~/.ros/camera_info/iot_robot_camera.yaml")
 MOTOR_PLUGIN_PACKAGE = "cubemars_hardware_safe"
+# What imu.launch.py needs besides iot_robot_drivers; only the robot environment has them
+IMU_FILTER_PACKAGE = "imu_filter_madgwick"
+IMU_I2C_MODULE = "smbus2"
 # Seconds a spawner waits for the controller manager before giving up, so a controller
 # manager that never comes up ends the launch instead of hanging it
 CONTROLLER_MANAGER_TIMEOUT = 30
@@ -53,11 +72,19 @@ def check_motor_plugin():
         ) from None
 
 
-def check_can(interface, can_ids):
-    # Imported here so mock:=true works without the drivers package on the path
-    from iot_robot_drivers.cubemars import CanCheckError, preflight
+def load_motors(path, gizmo_mode):
+    """Validate motors.yaml before xacro reads it, for a clear message instead of a trace."""
     try:
-        heard = preflight(interface, can_ids, timeout=2.0)
+        return motor_config.load(path, require_gizmo=gizmo_mode == "can")
+    except motor_config.MotorConfigError as err:
+        raise RuntimeError(
+            f"{err}\nFix the file (docs/todo.md), or pass another one with motors:=PATH."
+        ) from None
+
+
+def check_can(interface, can_ids, names):
+    try:
+        heard = preflight(interface, can_ids, timeout=2.0, names=names)
     except CanCheckError as err:
         raise RuntimeError(
             f"CAN pre-flight check failed, not starting the robot.\n{err}\n"
@@ -66,7 +93,40 @@ def check_can(interface, can_ids):
     except OSError as err:
         raise RuntimeError(f"Cannot open CAN interface '{interface}': {err}") from None
     return LogInfo(msg="CAN pre-flight OK: " + ", ".join(
-        f"motor {can_id} {status.temperature_c} C" for can_id, status in sorted(heard.items())))
+        f"{describe(can_id, names)} {status.temperature_c} C"
+        for can_id, status in heard.items()))
+
+
+def missing_imu_packages():
+    missing = []
+    try:
+        get_package_share_directory(IMU_FILTER_PACKAGE)
+    except PackageNotFoundError:
+        missing.append(IMU_FILTER_PACKAGE)
+    if importlib.util.find_spec(IMU_I2C_MODULE) is None:
+        missing.append(IMU_I2C_MODULE)
+    return missing
+
+
+def imu_actions():
+    """Include imu.launch.py, or explain why the IMU is left out.
+
+    The IMU is optional: a missing sensor only makes lsm9ds1_node log and retry, and an
+    environment without its packages (the laptop's default environment) skips it,
+    rather than failing the whole launch.
+    """
+    missing = missing_imu_packages()
+    if missing:
+        return [LogInfo(msg=(
+            f"Not starting the IMU: this environment lacks {' and '.join(missing)} (only "
+            "the robot environment has them). Pass imu:=false to hide this message."))]
+    share = get_package_share_directory("iot_robot_bringup")
+    return [IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(share, "launch", "imu.launch.py")),
+        # Passed explicitly: an include sees the parent's launch configurations, so an
+        # unrelated params_file given to this launch would otherwise reach the IMU
+        launch_arguments={"params_file": os.path.join(share, "config", "imu.yaml")}.items(),
+    )]
 
 
 def camera_info_url():
@@ -97,7 +157,6 @@ def send_motor_stop(interface, can_ids):
     also covers a crash or SIGKILL of ros2_control_node, where the plugin gets no chance
     to stop the motors.
     """
-    from iot_robot_drivers.cubemars import CanBus, stop_motors
     logger = get_logger("robot.launch.py")
     try:
         with CanBus(interface, status_only=True) as bus:
@@ -128,31 +187,44 @@ def on_control_node_exit(mock, interface, can_ids):
 
 def launch_setup(context):
     arg = {name: context.launch_configurations[name] for name in (
-        "mock", "camera", "web", "check_can", "can_interface", "left_can_id",
-        "right_can_id", "left_direction", "right_direction", "stm32_port", "gizmo_mode",
-        "start_estopped")}
+        "mock", "camera", "web", "imu", "check_can", "can_interface", "motors",
+        "stm32_port", "gizmo_mode", "start_estopped")}
     mock = is_true(arg["mock"])
-    can_ids = [int(arg["left_can_id"]), int(arg["right_can_id"])]
+    gizmo_mode = arg["gizmo_mode"]
+    gizmo_can = gizmo_mode == "can"
+    # xacro needs an absolute path; a relative one is taken from the launch's directory
+    motors_path = os.path.abspath(os.path.expanduser(arg["motors"]))
+    motors = load_motors(motors_path, gizmo_mode)
+    # The motors robot.launch.py commands, checks and stops. In gizmo_mode fixed or servo
+    # the gizmo motors may still be powered on the bus, but nothing drives them
+    in_use = motors.in_use(gizmo_mode)
+    can_ids = [motor.can_id for motor in in_use]
 
-    actions = []
+    actions = [LogInfo(msg=f"Motors from {motors_path}: " + ", ".join(
+        describe(motor.can_id, motors.names()) for motor in in_use))]
     if not mock:
         check_motor_plugin()
         if is_true(arg["check_can"]):
-            actions.append(check_can(arg["can_interface"], can_ids))
+            actions.append(check_can(arg["can_interface"], can_ids, motors.names()))
+        zeroed = [motor.joint for motor in in_use if motor.zero_on_start]
+        if zeroed:
+            actions.append(LogInfo(msg=(
+                f"{', '.join(zeroed)}: the pose at start-up becomes the zero "
+                "(zero_on_start in motors.yaml). If the gizmo was not at its zero pose "
+                "when the robot started, put it there and restart (docs/checklist.md).")))
 
     pkg = FindPackageShare("iot_robot_bringup")
     urdf = PathJoinSubstitution([pkg, "urdf", "iot_robot.urdf.xacro"])
     controllers = PathJoinSubstitution([pkg, "config", "controllers.yaml"])
     twist_mux = PathJoinSubstitution(
         [FindPackageShare("iot_robot_behavior"), "config", "twist_mux.yaml"])
+    # The URDF reads the CAN IDs and directions from motors.yaml itself
     robot_description = ParameterValue(Command([
         "xacro ", urdf,
         " mock:=", arg["mock"],
         " can_interface:=", arg["can_interface"],
-        " left_can_id:=", arg["left_can_id"],
-        " right_can_id:=", arg["right_can_id"],
-        " left_direction:=", arg["left_direction"],
-        " right_direction:=", arg["right_direction"],
+        " motors:=", shlex.quote(motors_path),
+        " gizmo_mode:=", gizmo_mode,
     ]), value_type=str)
 
     def spawner(name):
@@ -184,22 +256,28 @@ def launch_setup(context):
             on_exit=on_control_node_exit(mock, arg["can_interface"], can_ids))),
         *spawner("joint_state_broadcaster"),
         *spawner("diff_drive_controller"),
+        # Pan/tilt position commands, e.g. from target_follower
+        *(spawner("gizmo_controller") if gizmo_can else []),
         Node(
             package="twist_mux",
             executable="twist_mux",
             parameters=[twist_mux, {"use_sim_time": False}],
             remappings=[("cmd_vel_out", "/diff_drive_controller/cmd_vel")],
         ),
-        # Ultrasonics, battery voltage and the gizmo joint states. The bridge reconnects
-        # by itself, so it runs even when the board is unplugged
+        # Ultrasonics and battery voltage, plus the gizmo joint states in gizmo_mode
+        # fixed and servo. The bridge reconnects by itself, so it runs even when the
+        # board is unplugged
         Node(
             package="iot_robot_drivers",
             executable="stm32_bridge",
-            parameters=[{"port": arg["stm32_port"], "gizmo_mode": arg["gizmo_mode"]}],
+            parameters=[{"port": arg["stm32_port"], "gizmo_mode": gizmo_mode}],
             respawn=True,
             respawn_delay=2.0,
         ),
     ]
+
+    if is_true(arg["imu"]):
+        actions += imu_actions()
 
     if is_true(arg["camera"]):
         actions.append(Node(
@@ -232,30 +310,32 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "web", default_value="true", description="Start the browser controller"),
         DeclareLaunchArgument(
+            "imu", default_value="true",
+            description="Start the LSM9DS1 IMU and its orientation filter (imu.launch.py, "
+                        "config/imu.yaml). A missing sensor does not stop the robot"),
+        DeclareLaunchArgument(
             "start_estopped", default_value="true",
             description="Start with the web E-stop engaged, so a restart (the recovery "
                         "after a motor fault or the hardware E-stop) never drives by itself"),
         DeclareLaunchArgument(
             "check_can", default_value="true",
-            description="Check the CAN link and motor status frames before starting"),
+            description="Check the CAN link and the status frames of every motor in use "
+                        "before starting"),
         DeclareLaunchArgument(
             "can_interface", default_value="can0", description="SocketCAN interface"),
         DeclareLaunchArgument(
-            "left_can_id", default_value="1", description="CAN ID of the left wheel motor"),
-        DeclareLaunchArgument(
-            "right_can_id", default_value="2", description="CAN ID of the right wheel motor"),
-        DeclareLaunchArgument(
-            "left_direction", default_value="1",
-            description="1 if a positive left motor speed drives the robot forward, else -1"),
-        DeclareLaunchArgument(
-            "right_direction", default_value="-1",
-            description="1 if a positive right motor speed drives the robot forward, else -1"),
+            "motors",
+            default_value=os.path.join(
+                get_package_share_directory("iot_robot_bringup"), "config", "motors.yaml"),
+            description="Motor configuration: the CAN ID and direction of each joint's "
+                        "motor (docs/todo.md)"),
         DeclareLaunchArgument(
             "stm32_port", default_value="/dev/stm32",
             description="Serial port of the Nucleo sensor board (udev symlink)"),
         DeclareLaunchArgument(
-            "gizmo_mode", default_value="fixed", choices=["fixed", "servo"],
-            description="fixed: publish constant gizmo joint states; "
-                        "servo: drive hobby servos on the Nucleo"),
+            "gizmo_mode", default_value="can", choices=["can", "fixed", "servo"],
+            description="can: the gizmo motors are driven over CAN (gizmo_controller); "
+                        "fixed: gizmo not driven, constant joint states from stm32_bridge; "
+                        "servo: legacy hobby servos on the Nucleo (not fitted)"),
         OpaqueFunction(function=launch_setup),
     ])

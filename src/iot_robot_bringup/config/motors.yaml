@@ -1,0 +1,35 @@
+# The four CubeMars AK45-10 motors on the CAN bus, one entry per joint.
+#
+# This is the only place the motor CAN IDs are set. robot.launch.py (URDF and CAN
+# pre-flight check), cubemars_tool and the systemd stop step all read this file.
+# Which joint each ID below sits on is an assumption until checked. To find out, run
+#   pixi run -e robot can-identify
+# (docs/todo.md); with --write it updates the can_id values here and keeps everything
+# else. Edits take effect at the next launch (sudo systemctl restart iot-robot for the
+# service) without a rebuild, because `pixi run build` installs this file as a symlink
+# (--symlink-install).
+#
+# Keys per joint:
+#   can_id         CAN ID set on the motor with the CubeMars Upper Computer and R-Link
+#                  (1-254, unique on the bus)
+#   direction      1 or -1: flips the motor so that a positive command moves the
+#                  joint in its positive URDF direction (wheels: robot forward;
+#                  yaw: turn left; pitch: tilt down). Check with cubemars_tool jog
+#   zero_on_start  gizmo joints only. The motors cannot remember their position over
+#                  a power cycle, so the pose the gizmo is in when the robot software
+#                  starts becomes the joint zero (docs/checklist.md)
+motors:
+  wheel_joint_left:
+    can_id: 10
+    direction: 1
+  wheel_joint_right:
+    can_id: 11
+    direction: -1
+  gizmo_yaw_joint:
+    can_id: 12
+    direction: 1
+    zero_on_start: true
+  gizmo_pitch_joint:
+    can_id: 13
+    direction: 1
+    zero_on_start: true

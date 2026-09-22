@@ -7,7 +7,7 @@
 # Launch arguments and ROS settings live in /etc/default/iot-robot.
 
 [Unit]
-Description=iot_robot ROS 2 bringup (wheel motors, camera, STM32 bridge, web UI)
+Description=iot_robot ROS 2 bringup (CAN motors, camera, STM32 bridge, IMU, web UI)
 Documentation=file://@REPO@/docs/hardware.md
 # can0 is configured by systemd-networkd. There is no hard dependency on the adapter:
 # if it or the motors are missing, the launch's CAN pre-flight check fails and the
@@ -20,17 +20,18 @@ StartLimitIntervalSec=0
 Type=exec
 User=@USER@
 WorkingDirectory=@REPO@
-# Defaults for the motor stop below; /etc/default/iot-robot overrides them
-Environment=IOT_CAN_INTERFACE=can0 "IOT_MOTOR_IDS=1 2"
+# Default for the motor stop below; /etc/default/iot-robot overrides it
+Environment=IOT_CAN_INTERFACE=can0
 EnvironmentFile=-/etc/default/iot-robot
 # --frozen installs exactly what pixi.lock says without re-solving, so a boot never
 # waits on the network or silently changes package versions.
 # $IOT_ROBOT_ARGS is split at whitespace into separate launch arguments.
 ExecStart=@PIXI@ run --frozen -e robot robot $IOT_ROBOT_ARGS
-# After every stop, crash or kill of the robot: zero speed, then release, to both
-# motors. robot.launch.py does the same when ros2_control_node exits; this also covers
-# the launch itself being killed. It does nothing when the CAN link is not up.
-ExecStopPost=@PIXI@ run --frozen -e robot ros2 run iot_robot_drivers cubemars_tool --interface ${IOT_CAN_INTERFACE} stop --ids $IOT_MOTOR_IDS
+# After every stop, crash or kill of the robot: zero speed, then release, to every
+# motor. robot.launch.py does the same when ros2_control_node exits; this also covers
+# the launch itself being killed. The IDs are those in motors.yaml plus any motor heard
+# on the bus. It does nothing when the CAN link is not up.
+ExecStopPost=@PIXI@ run --frozen -e robot ros2 run iot_robot_drivers cubemars_tool --interface ${IOT_CAN_INTERFACE} stop
 Restart=always
 RestartSec=5
 # Lets controller_manager run its 50 Hz loop with SCHED_FIFO, which cuts timing jitter

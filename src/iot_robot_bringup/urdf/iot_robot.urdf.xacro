@@ -4,29 +4,50 @@
     <!-- mock:=true replaces the motors with mock_components, for testing without CAN -->
     <xacro:arg name="mock" default="false" />
     <xacro:arg name="can_interface" default="can0" />
-    <xacro:arg name="left_can_id" default="1" />
-    <xacro:arg name="right_can_id" default="2" />
-    <!-- 1 or -1: whether a positive motor speed turns that wheel forward. Both joint axes
-         point to the robot's left (+y), but the motors are mirror-mounted with their output
-         faces outwards, so with the same motor convention exactly one needs flipping.
-         Check with `cubemars_tool jog` (docs/hardware.md) before the first drive -->
-    <xacro:arg name="left_direction" default="1" />
-    <xacro:arg name="right_direction" default="-1" />
+    <!-- CAN ID, direction and zero_on_start of every motor (absolute path). This file is
+         the only place they are set; see the comments in it -->
+    <xacro:arg name="motors" default="$(find iot_robot_bringup)/config/motors.yaml" />
+    <!-- can: the gizmo motors are driven over CAN by GizmoSystem (gizmo_controller).
+         fixed, servo: the gizmo joints are not in ros2_control; stm32_bridge publishes
+         their joint states -->
+    <xacro:arg name="gizmo_mode" default="can" />
 
-    <!-- The physical robot: links, joints, meshes, camera and ultrasonic frames -->
+    <!-- The physical robot: links, joints (with their limits), meshes, camera and
+         ultrasonic frames -->
     <xacro:include filename="$(find iot_robot_description)/urdf/robot.urdf.xacro" />
 
+    <xacro:property name="gizmo_mode" value="$(arg gizmo_mode)" />
+    <xacro:property name="gizmo_can" lazy_eval="false"
+        value="${gizmo_mode == 'can' if gizmo_mode in ['can', 'fixed', 'servo'] else xacro.fatal('gizmo_mode must be can, fixed or servo, got: ' + str(gizmo_mode))}" />
+
+    <!-- motors.yaml, read only on first use, i.e. only without mock:=true -->
+    <xacro:property name="motors_file" value="$(arg motors)" />
+    <xacro:property name="motors_yaml" value="${xacro.load_yaml(motors_file)}" />
+    <xacro:property name="motors_table"
+        value="${motors_yaml['motors'] if python.isinstance(motors_yaml, dict) and 'motors' in motors_yaml and python.isinstance(motors_yaml['motors'], dict) else xacro.fatal(motors_file + ': expected a top-level motors: mapping with one entry per joint')}" />
+
     <!-- CubeMars AK45-10 (datasheet): 14 pole pairs, 10:1 reduction, motor-side torque
-         constant 0.127 Nm/A. cubemars_hardware multiplies speed commands, speed and effort
-         feedback by gear_ratio, so a negative gear_ratio reverses a wheel consistently.
-         Position feedback ignores the sign, which is why diff_drive uses velocity only -->
-    <xacro:macro name="wheel" params="joint can_id direction">
+         constant 0.127 Nm/A. The per-joint direction from motors.yaml is applied by
+         cubemars_hardware_safe to every command and state (position, velocity, effort),
+         so gear_ratio stays positive -->
+    <xacro:macro name="ak45_10_params" params="joint">
+        <xacro:property name="entry" lazy_eval="false"
+            value="${motors_table[joint] if joint in motors_table and python.isinstance(motors_table[joint], dict) else xacro.fatal(motors_file + ': no entry for ' + joint + ' under motors: (docs/todo.md)')}" />
+        <xacro:property name="can_id" lazy_eval="false"
+            value="${entry['can_id'] if 'can_id' in entry and python.isinstance(entry['can_id'], int) and not python.isinstance(entry['can_id'], bool) and entry['can_id'] >= 1 and 254 >= entry['can_id'] else xacro.fatal(motors_file + ': ' + joint + ' needs can_id: an integer from 1 to 254')}" />
+        <xacro:property name="direction" lazy_eval="false"
+            value="${entry['direction'] if 'direction' in entry and not python.isinstance(entry['direction'], bool) and entry['direction'] in [1, -1] else xacro.fatal(motors_file + ': ' + joint + ' needs direction: 1 or -1')}" />
+        <param name="can_id">${can_id}</param>
+        <param name="direction">${direction}</param>
+        <param name="pole_pairs">14</param>
+        <param name="gear_ratio">10</param>
+        <param name="kt">0.127</param>
+    </xacro:macro>
+
+    <xacro:macro name="wheel" params="joint">
         <joint name="${joint}">
             <xacro:unless value="$(arg mock)">
-                <param name="can_id">${can_id}</param>
-                <param name="pole_pairs">14</param>
-                <param name="gear_ratio">${10 * direction}</param>
-                <param name="kt">0.127</param>
+                <xacro:ak45_10_params joint="${joint}" />
             </xacro:unless>
             <command_interface name="velocity" />
             <state_interface name="position">
@@ -41,6 +62,60 @@
         </joint>
     </xacro:macro>
 
+    <xacro:macro name="gizmo_joint" params="joint">
+        <joint name="${joint}">
+            <xacro:unless value="$(arg mock)">
+                <xacro:ak45_10_params joint="${joint}" />
+                <!-- zero_on_start in motors.yaml: the motor gets a temporary origin when
+                     the component activates, so the pose the gizmo is in at start-up
+                     becomes position 0 (the motor forgets its position at power-off) -->
+                <xacro:property name="zero_on_start" lazy_eval="false"
+                    value="${motors_table[joint].get('zero_on_start', False) is True}" />
+                <param name="zero_on_activate">${'true' if zero_on_start else 'false'}</param>
+                <!-- Stall guard: the component stops when the joint pushes harder than
+                     stall_effort (Nm, from the motor current) for stall_time_ms, e.g.
+                     against a hard stop after being zeroed in the wrong pose. Starting
+                     values, well above what the camera load needs and below the motor's
+                     peak torque; they need tuning on the robot (watch the effort in
+                     /joint_states while the gizmo moves) -->
+                <param name="stall_effort">1.0</param>
+                <param name="stall_time_ms">500</param>
+                <!-- cubemars_hardware_safe clamps position commands to the URDF limits and
+                     slews them at the URDF velocity limit, so the controller manager's
+                     joint limiter is switched off for this joint. Its position clamp
+                     raises an error, and the controller manager deactivates
+                     gizmo_controller, whenever the measured position is more than 0.5 deg
+                     outside the limits; a zeroed joint whose zero is at a limit (pitch:
+                     upper limit 0) gets there with the slightest overshoot or push. Its
+                     velocity limit logs an error once per second while any command moves
+                     faster than the limit, which every jump of the target does -->
+                <limits enable="false" />
+            </xacro:unless>
+            <command_interface name="position" />
+            <state_interface name="position">
+                <param name="initial_value">0.0</param>
+            </state_interface>
+            <state_interface name="velocity">
+                <param name="initial_value">0.0</param>
+            </state_interface>
+            <xacro:unless value="$(arg mock)">
+                <state_interface name="effort" />
+            </xacro:unless>
+        </joint>
+    </xacro:macro>
+
+    <!-- cubemars_hardware wrapped by cubemars_hardware_safe
+         (src/external/cubemars_hardware_safe): every motor of a component gets zero speed
+         and is released whenever the component stops, and when one of its motors reports
+         a fault, stalls or sends no status for status_timeout_ms (the motors send status
+         at 100-200 Hz). The two components fail independently -->
+    <xacro:macro name="cubemars_hardware">
+        <plugin>cubemars_hardware_safe/SafeCubeMarsSystemHardware</plugin>
+        <param name="can_interface">$(arg can_interface)</param>
+        <param name="status_timeout_ms">100</param>
+        <param name="brake_time_ms">300</param>
+    </xacro:macro>
+
     <ros2_control name="WheelSystem" type="system">
         <hardware>
             <xacro:if value="$(arg mock)">
@@ -49,24 +124,26 @@
                 <param name="calculate_dynamics">true</param>
             </xacro:if>
             <xacro:unless value="$(arg mock)">
-                <!-- cubemars_hardware wrapped by cubemars_hardware_safe
-                     (src/external/cubemars_hardware_safe): the motors get zero speed and
-                     are released whenever the component stops, and both wheels stop
-                     when a motor reports a fault or sends no status for
-                     status_timeout_ms (the motors send status at 100-200 Hz) -->
-                <plugin>cubemars_hardware_safe/SafeCubeMarsSystemHardware</plugin>
-                <param name="can_interface">$(arg can_interface)</param>
-                <param name="status_timeout_ms">100</param>
-                <param name="brake_time_ms">300</param>
+                <xacro:cubemars_hardware />
             </xacro:unless>
         </hardware>
-        <xacro:wheel joint="wheel_joint_left" can_id="$(arg left_can_id)"
-            direction="$(arg left_direction)" />
-        <xacro:wheel joint="wheel_joint_right" can_id="$(arg right_can_id)"
-            direction="$(arg right_direction)" />
+        <xacro:wheel joint="wheel_joint_left" />
+        <xacro:wheel joint="wheel_joint_right" />
     </ros2_control>
 
-    <!-- The gizmo joints are not in ros2_control on the real robot: stm32_bridge publishes
-         their joint states and, in servo mode, drives hobby servos from the Nucleo -->
+    <xacro:if value="${gizmo_can}">
+        <ros2_control name="GizmoSystem" type="system">
+            <hardware>
+                <xacro:if value="$(arg mock)">
+                    <plugin>mock_components/GenericSystem</plugin>
+                </xacro:if>
+                <xacro:unless value="$(arg mock)">
+                    <xacro:cubemars_hardware />
+                </xacro:unless>
+            </hardware>
+            <xacro:gizmo_joint joint="gizmo_yaw_joint" />
+            <xacro:gizmo_joint joint="gizmo_pitch_joint" />
+        </ros2_control>
+    </xacro:if>
 
 </robot>

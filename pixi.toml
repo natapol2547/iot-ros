@@ -41,8 +41,15 @@ bridge = "ros2 run iot_robot_drivers stm32_bridge"
 fake-stm32 = "ros2 run iot_robot_drivers fake_stm32"
 # Bring up can0 at 1 Mbit/s by hand (deploy/ configures it at boot instead).
 can-up = "sudo deploy/scripts/can_up.sh"
-# Checks that the CAN interface is up and both motors send status frames.
+# CubeMars motor tools; the CAN IDs and joints come from
+# src/iot_robot_bringup/config/motors.yaml. Extra arguments are appended,
+# e.g. `pixi run -e robot can-identify --write`.
+# Checks that the CAN interface is up and every motor in use sends status frames.
 can-check = "ros2 run iot_robot_drivers cubemars_tool check"
+# Moves one motor at a time and asks which joint moved, to map CAN IDs to joints.
+can-identify = "ros2 run iot_robot_drivers cubemars_tool identify"
+# Live position, speed, current, temperature and fault of every motor on the bus.
+can-watch = "ros2 run iot_robot_drivers cubemars_tool watch"
 
 [activation]
 scripts = ["scripts/activate.sh"]
@@ -130,7 +137,12 @@ ros-jazzy-controller-manager = "*"
 ros-jazzy-hardware-interface = "*"
 ros-jazzy-diff-drive-controller = "*"
 ros-jazzy-joint-state-broadcaster = "*"
+# gizmo_controller (JointGroupPositionController) for the pan/tilt motors
+ros-jazzy-position-controllers = "*"
 ros-jazzy-ros2controlcli = "*"
+# LSM9DS1 IMU on the Pi's I2C bus, and the orientation filter behind it
+smbus2 = "*"
+ros-jazzy-imu-filter-madgwick = "*"
 # Raspberry Pi Camera v2.1 through libcamera
 ros-jazzy-camera-ros = "*"
 ros-jazzy-cv-bridge = "*"

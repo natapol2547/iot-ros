@@ -20,12 +20,16 @@ import socket
 import struct
 import subprocess
 import time
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from glob import glob
 
 MODE_CURRENT = 1
 MODE_SPEED = 3
 STATUS = 0x29
+# Command modes 0 (duty cycle) to 6 (position-velocity loop): frames that only a
+# controlling program sends, never a motor
+COMMAND_MODES = range(0, 7)
 
 ERRORS = {
     0: "no fault",
@@ -93,7 +97,10 @@ def stop_motors(bus, can_ids, brake_time=0.3, period=0.02):
 @dataclass(frozen=True)
 class Status:
     can_id: int
-    position_deg: float  # motor-side, wraps at +-3200 deg
+    # Gearbox output, relative to the drive's origin, limited to +-3200 deg. The
+    # single-encoder AK45-10 forgets its position when powered off: after power-up it
+    # is only defined within one rotor turn (36 deg at the output)
+    position_deg: float
     speed_erpm: float
     current_a: float
     temperature_c: int
@@ -261,25 +268,97 @@ def check_interface(interface, bitrate=1000000):
     return details
 
 
-def wait_for_status(interface, can_ids, timeout):
-    """Return the first Status from each of can_ids, stopping early once all are heard."""
-    wanted = set(can_ids)
-    heard = {}
-    deadline = time.monotonic() + timeout
-    with CanBus(interface, status_only=True) as bus:
-        while wanted - set(heard) and (remaining := deadline - time.monotonic()) > 0.0:
+@dataclass
+class Heard:
+    """What listen() saw on the bus."""
+
+    # Latest status per motor CAN ID
+    status: dict = field(default_factory=dict)
+    # Status frames per CAN ID, for the motors' status rate
+    frames: Counter = field(default_factory=Counter)
+    # CAN IDs that another program sent servo commands to
+    commanded: set = field(default_factory=set)
+    # Seconds actually spent listening
+    elapsed: float = 0.0
+
+    def rate(self, can_id):
+        return self.frames[can_id] / self.elapsed if self.elapsed > 0.0 else 0.0
+
+
+def listen(interface, duration, until=(), status_only=True):
+    """Listen for up to duration seconds, or until every CAN ID in until has reported.
+
+    With status_only the kernel drops all but status frames. Without it, command frames
+    are noted in Heard.commanded, which shows whether another program (robot.launch.py,
+    the systemd service) is driving the motors. The own socket never sees its own frames.
+    """
+    wanted = set(until)
+    heard = Heard()
+    start = time.monotonic()
+    deadline = start + duration
+    with CanBus(interface, status_only=status_only) as bus:
+        while (not wanted or wanted - set(heard.status)) and (
+                remaining := deadline - time.monotonic()) > 0.0:
             frame = bus.recv(remaining)
             if frame is None:
                 break
             status = decode_status(*frame)
             if status is not None:
-                heard[status.can_id] = status
+                heard.status[status.can_id] = status
+                heard.frames[status.can_id] += 1
+            elif frame[0] >> 8 in COMMAND_MODES:
+                heard.commanded.add(frame[0] & 0xFF)
+    heard.elapsed = time.monotonic() - start
     return heard
 
 
-def preflight(interface, can_ids, timeout=1.0, bitrate=1000000):
+def wait_for_status(interface, can_ids, timeout):
+    """Return {can_id: Status} for the can_ids heard, stopping early once all are."""
+    return listen(interface, timeout, until=can_ids).status
+
+
+def describe(can_id, names=None):
+    """'wheel_joint_left (CAN ID 10)' when names knows the ID, else 'CAN ID 10'."""
+    name = (names or {}).get(can_id)
+    return f"{name} (CAN ID {can_id})" if name else f"CAN ID {can_id}"
+
+
+def missing_motor_help(details, others, names=None):
+    """Lines explaining why motors send no status, given the other IDs that do."""
+    lines = []
+    if others:
+        lines.append(
+            "Status frames were heard from " + ", ".join(
+                describe(can_id, names) if can_id in (names or {})
+                else f"CAN ID {can_id} (not in motors.yaml)" for can_id in others) + ".")
+        lines.append(
+            "If a motor has a different ID than motors.yaml says, find out which motor "
+            "has which ID with `pixi run -e robot can-identify` and correct "
+            "src/iot_robot_bringup/config/motors.yaml (docs/todo.md).")
+    if details.get("state") in ("ERROR-PASSIVE", "ERROR-WARNING"):
+        lines.append(
+            f"The controller is {details['state']}, which usually means nothing "
+            "acknowledges its frames: motors unpowered, wrong bitrate or no termination.")
+    lines.append(
+        "Check that the motors are powered (battery connected, E-stop released), "
+        "CANH/CANL are not swapped, the bus has 120 ohm termination at both ends, and "
+        "that each motor is in servo mode with CAN status feedback enabled (100-200 Hz) "
+        "in the CubeMars Upper Computer. See docs/hardware.md, section "
+        "'Motor configuration'.")
+    return lines
+
+
+def fault_help(faults, names=None):
+    return ("Motor fault: " + "; ".join(
+        f"{describe(status.can_id, names)}: {status.error_text}" for status in faults)
+        + ". Resolve it (battery voltage, motor temperature, a blocked wheel or gizmo "
+        "joint) before driving; power-cycle the motors if the fault does not clear.")
+
+
+def preflight(interface, can_ids, timeout=1.0, bitrate=1000000, names=None):
     """Check the CAN link and that every motor reports status without a fault.
 
+    names ({can_id: joint name}, e.g. from motors.yaml) labels the motors in messages.
     Returns {can_id: Status}. Raises CanCheckError with remediation text otherwise.
     """
     details = check_interface(interface, bitrate)
@@ -288,26 +367,11 @@ def preflight(interface, can_ids, timeout=1.0, bitrate=1000000):
     if missing:
         others = sorted(set(heard) - set(can_ids))
         lines = [
-            f"No status frames from motor CAN ID(s) {', '.join(map(str, missing))} on "
-            f"'{interface}' within {timeout:g} s."]
-        if others:
-            lines.append(
-                f"Status was heard from unexpected CAN ID(s) {', '.join(map(str, others))}: "
-                "set left_can_id/right_can_id to match, or change the motor IDs.")
-        if details.get("state") in ("ERROR-PASSIVE", "ERROR-WARNING"):
-            lines.append(
-                f"The controller is {details['state']}, which usually means nothing "
-                "acknowledges its frames: motors unpowered, wrong bitrate or no termination.")
-        lines.append(
-            "Check that the motors have 24 V, CANH/CANL are not swapped, the bus has "
-            "120 ohm termination at both ends, and that each motor is in servo mode with "
-            "CAN status feedback enabled (100-200 Hz) in the CubeMars upper computer. "
-            "See docs/hardware.md, section 'Motor configuration'.")
+            "No status frames from " + ", ".join(describe(can_id, names) for can_id in missing)
+            + f" on '{interface}' within {timeout:g} s."]
+        lines += missing_motor_help(details, others, names)
         raise CanCheckError("\n".join(lines))
-    faults = [status for status in heard.values() if status.error]
+    faults = [heard[can_id] for can_id in can_ids if heard[can_id].error]
     if faults:
-        raise CanCheckError("Motor fault: " + "; ".join(
-            f"CAN ID {status.can_id}: {status.error_text}" for status in faults)
-            + ". Resolve it (battery voltage, motor temperature, a blocked wheel) "
-            "before driving; power-cycle the motor if the fault does not clear.")
-    return heard
+        raise CanCheckError(fault_help(faults, names))
+    return {can_id: heard[can_id] for can_id in can_ids}

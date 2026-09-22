@@ -1,9 +1,17 @@
-"""Bridge the Nucleo-F401RE sensor board to ROS: ultrasonics, battery voltage, gizmo servos.
+"""Bridge the Nucleo-F401RE sensor board to ROS: ultrasonics, battery voltage, gizmo joints.
 
 Replaces the first ultrasonic_node.py. Distances are published as sensor_msgs/Range in
 metres, the serial port is read on its own thread instead of polled from a timer, and the
 node reconnects when the board is unplugged or reset. The line format is described in
 stm32_protocol.
+
+gizmo_mode says who owns the gizmo joints:
+    can    the gizmo motors are in ros2_control, whose joint_state_broadcaster publishes
+           their joint states; the bridge leaves the gizmo alone
+    fixed  no gizmo drive; the bridge publishes constant joint states (fixed_yaw,
+           fixed_pitch) so that robot_state_publisher can place the camera
+    servo  legacy hobby servos on the Nucleo: the bridge sends /gizmo_controller/commands
+           to the board and publishes the commanded angles as joint states
 """
 
 import math
@@ -21,7 +29,7 @@ from std_msgs.msg import Float64MultiArray
 from iot_robot_drivers import stm32_protocol as protocol
 
 GIZMO_JOINTS = ["gizmo_yaw_joint", "gizmo_pitch_joint"]
-GIZMO_MODES = ("fixed", "servo")
+GIZMO_MODES = ("can", "fixed", "servo")
 # A line is at most ~40 bytes; anything much longer is noise, e.g. a wrong baud rate
 MAX_LINE_BYTES = 256
 
@@ -99,11 +107,13 @@ class Stm32Bridge(Node):
         }
         self.battery_pub = self.create_publisher(
             BatteryState, "/battery_state", 10)
-        self.joint_pub = self.create_publisher(JointState, "/joint_states", 10)
-
-        self.create_subscription(
-            Float64MultiArray, "/gizmo_controller/commands", self.on_gizmo_command, 10)
-        self.create_timer(1.0 / joint_state_rate, self.publish_joint_states)
+        # In can mode joint_state_broadcaster publishes the gizmo joints; a second
+        # publisher of the same joints would make them jump between two values
+        if self.gizmo_mode != "can":
+            self.joint_pub = self.create_publisher(JointState, "/joint_states", 10)
+            self.create_subscription(
+                Float64MultiArray, "/gizmo_controller/commands", self.on_gizmo_command, 10)
+            self.create_timer(1.0 / joint_state_rate, self.publish_joint_states)
         if self.gizmo_mode == "servo":
             self.create_timer(1.0 / servo_rate, self.send_gizmo)
 

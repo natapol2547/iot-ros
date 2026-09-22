@@ -1,4 +1,5 @@
-# Nucleo-F401RE sensor board (ultrasonics, battery voltage, gizmo servos).
+# Nucleo-F401RE sensor board (ultrasonics, battery voltage; legacy gizmo servos in a
+# servo build of the firmware, not fitted).
 #
 # The board's USB port is the on-board ST-LINK/V2-1 debugger; its virtual COM port
 # (USB ID 0483:374b) enumerates as /dev/ttyACM<n>. <n> depends on plug order and on

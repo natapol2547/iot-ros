@@ -3,14 +3,17 @@
 <package format="3">
     <name>iot_robot_drivers</name>
     <version>0.1.0</version>
-    <description>Drivers for the real iot_robot: STM32 sensor bridge and CubeMars CAN tools.</description>
+    <description>Drivers for the real iot_robot: STM32 sensor bridge, CubeMars CAN tools and the LSM9DS1 IMU.</description>
     <maintainer email="contact@findmy3d.com">tawan</maintainer>
     <license>Apache-2.0</license>
 
+    <exec_depend>ament_index_python</exec_depend>
     <exec_depend>rclpy</exec_depend>
     <exec_depend>sensor_msgs</exec_depend>
     <exec_depend>std_msgs</exec_depend>
     <exec_depend>python3-serial</exec_depend>
+    <exec_depend>python3-smbus2</exec_depend>
+    <exec_depend>python3-yaml</exec_depend>
 
     <test_depend>python3-pytest</test_depend>
 
