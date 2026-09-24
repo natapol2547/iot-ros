@@ -18,3 +18,18 @@ if [ -f "$iot_setup" ]; then
   fi
 fi
 unset iot_setup
+
+# The conda-forge libcamera build cannot use its compiled-in install paths:
+# conda rewrites the prefix inside the binary after the compiler has already
+# fixed the length of those strings, so a file name appended to them ends up
+# after a run of NUL bytes and is lost. libcamera then tries to execute the
+# directory libexec/libcamera instead of the IPA proxy worker ("Call timeout!",
+# "Failed to call init: -110", "no cameras available") and cannot find the
+# sensor tuning file. The environment overrides below are read at run time and
+# are not affected. The IPA runs in the proxy worker because the conda build
+# invalidates the IPA module signatures, which libcamera handles by isolating
+# the module.
+if [ -d "${CONDA_PREFIX}/libexec/libcamera" ]; then
+  export LIBCAMERA_IPA_PROXY_PATH="${CONDA_PREFIX}/libexec/libcamera"
+  export LIBCAMERA_IPA_CONFIG_PATH="${CONDA_PREFIX}/share/libcamera/ipa"
+fi

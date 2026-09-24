@@ -140,7 +140,12 @@ The image settings are in `src/iot_robot_bringup/config/camera.yaml`: sensor mod
 1640:1232 (the full field of view, 2 × 2 binned) scaled to 640 × 480. The smaller sensor
 modes crop the image, which would change the field of view the perception nodes assume.
 The camera uses the Raspberry Pi fork of libcamera from conda-forge, pinned in
-`pixi.toml`, so it behaves like `rpicam-hello` on the host.
+`pixi.toml`. It is independent of the host's libcamera, which `rpicam-hello` uses (0.7
+on Raspberry Pi OS Trixie). The conda build needs `LIBCAMERA_IPA_PROXY_PATH` and
+`LIBCAMERA_IPA_CONFIG_PATH`, which `scripts/activate.sh` sets for every `pixi run`; the
+comment there explains why. To test the camera through pixi's libcamera, with the robot
+stopped: `pixi run -e robot cam -l`, then
+`pixi run -e robot cam -c1 --capture=30 -s width=640,height=480`.
 
 ### STM32 sensor board
 
@@ -593,6 +598,7 @@ motor, a stall and a failed zero; `--help` lists them all.
 | `Ignoring malformed line from STM32` | Firmware prints another format | Compare with the protocol in [STM32 sensor board](#stm32-sensor-board) |
 | `STM32: warning: <side> sensor not responding` (or `echo stuck high`, `echo pulses too short`) | The firmware sees no valid echo from that sensor: 5 V, GND, TRIG or ECHO wiring, or a locked-up sensor | Check the sensor's wiring ([wiring.md](wiring.md#3-nucleo-f401re-sensor-board)); for `echo stuck high` unplug the Nucleo's USB for a few seconds. `/ultrasonic/<side>` is `NaN` until `STM32: info: <side> sensor recovered` |
 | `camera_ros` finds no camera | Ribbon reversed or loose, another program has the camera | `rpicam-hello --list-cameras` with the robot stopped |
+| `camera_node` dies with `Call timeout!`, `Failed to call init: -110` and `no cameras available`, while `rpicam-hello` works | `LIBCAMERA_IPA_PROXY_PATH` is not set, e.g. the node was started outside `pixi run` | Start it through `pixi run -e robot`, which sources `scripts/activate.sh` |
 | The laptop sees no topics from the Pi | Different `ROS_DOMAIN_ID`, or the Wi-Fi blocks multicast between clients | Match the domain; try a phone hotspot or wired link to rule out the network |
 | `pixi` says the environment does not support `linux-aarch64` | Missing `-e robot` | Add `-e robot` to every command on the Pi |
 | `activate.sh: install/ was built with another pixi environment` | `install/` comes from the other environment | `pixi run -e robot clean && pixi run -e robot build` |
