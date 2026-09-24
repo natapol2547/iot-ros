@@ -9,7 +9,6 @@
     .h { font-size: 17px; font-weight: bold; }
     .ph { font-size: 17px; font-weight: bold; fill: #0d47a1; }
     .id { font-size: 20px; font-weight: bold; fill: #6a1b9a; }
-    .as { font-size: 14px; font-weight: normal; fill: #6a1b9a; }
     .t { font-size: 14px; }
     .s { font-size: 13px; fill: #333; }
     .b { font-weight: bold; }
@@ -109,7 +108,7 @@
   <rect class="box act" x="290" y="230" width="250" height="180" rx="8"/>
   <text x="415" y="256" class="h" text-anchor="middle">AK45-10 LEFT wheel</text>
   <text x="415" y="276" class="s" text-anchor="middle">wheel_joint_left</text>
-  <text x="415" y="302" class="id" text-anchor="middle">CAN ID 10 <tspan class="as">(assumed)</tspan></text>
+  <text x="415" y="302" class="id" text-anchor="middle">CAN ID 12</text>
   <text x="415" y="324" class="s" text-anchor="middle">bus in 1/2, bus out 3/4</text>
   <text x="355" y="380" class="s" text-anchor="middle">1</text>
   <text x="395" y="380" class="s" text-anchor="middle">2</text>
@@ -133,7 +132,7 @@
   <rect class="box act" x="570" y="230" width="250" height="180" rx="8"/>
   <text x="695" y="256" class="h" text-anchor="middle">AK45-10 RIGHT wheel</text>
   <text x="695" y="276" class="s" text-anchor="middle">wheel_joint_right</text>
-  <text x="695" y="302" class="id" text-anchor="middle">CAN ID 11 <tspan class="as">(assumed)</tspan></text>
+  <text x="695" y="302" class="id" text-anchor="middle">CAN ID 13</text>
   <text x="695" y="324" class="s" text-anchor="middle">bus in 1/2, bus out 3/4</text>
   <text x="635" y="380" class="s" text-anchor="middle">1</text>
   <text x="675" y="380" class="s" text-anchor="middle">2</text>
@@ -157,7 +156,7 @@
   <rect class="box act" x="850" y="230" width="250" height="180" rx="8"/>
   <text x="975" y="256" class="h" text-anchor="middle">AK45-10 gizmo YAW</text>
   <text x="975" y="276" class="s" text-anchor="middle">gizmo_yaw_joint</text>
-  <text x="975" y="302" class="id" text-anchor="middle">CAN ID 12 <tspan class="as">(assumed)</tspan></text>
+  <text x="975" y="302" class="id" text-anchor="middle">CAN ID 10</text>
   <text x="975" y="324" class="s" text-anchor="middle">bus in 1/2, bus out 3/4</text>
   <text x="915" y="380" class="s" text-anchor="middle">1</text>
   <text x="955" y="380" class="s" text-anchor="middle">2</text>
@@ -181,7 +180,7 @@
   <rect class="box act" x="1130" y="230" width="250" height="180" rx="8"/>
   <text x="1255" y="256" class="h" text-anchor="middle">AK45-10 gizmo PITCH</text>
   <text x="1255" y="276" class="s" text-anchor="middle">gizmo_pitch_joint</text>
-  <text x="1255" y="302" class="id" text-anchor="middle">CAN ID 13 <tspan class="as">(assumed)</tspan></text>
+  <text x="1255" y="302" class="id" text-anchor="middle">CAN ID 11</text>
   <text x="1255" y="324" class="s" text-anchor="middle">bus in 1/2, R_T on 3/4</text>
   <text x="1195" y="380" class="s" text-anchor="middle">1</text>
   <text x="1235" y="380" class="s" text-anchor="middle">2</text>
@@ -249,11 +248,11 @@
   <rect class="panel" x="550" y="690" width="500" height="375" rx="8"/>
   <text x="565" y="718" class="ph">B. CAN IDs and the joint mapping</text>
   <text x="565" y="744" class="s">The four motors are set to CAN IDs 10, 11, 12 and 13.</text>
-  <text x="565" y="762" class="s">Which ID drives which joint is <tspan class="b">assumed</tspan> (as drawn).</text>
-  <text x="565" y="780" class="s">The wiring does not depend on it: each joint's ID lives in</text>
-  <text x="565" y="798" class="s">src/iot_robot_bringup/config/motors.yaml.</text>
-  <text x="565" y="824" class="s">Confirm the mapping once, robot software stopped and</text>
-  <text x="565" y="842" class="s">wheels off the ground:</text>
+  <text x="565" y="762" class="s">Which ID drives which joint was <tspan class="b">confirmed</tspan> against the</text>
+  <text x="565" y="780" class="s">hardware on 2026-09-24 (as drawn). Each joint's ID lives</text>
+  <text x="565" y="798" class="s">in src/iot_robot_bringup/config/motors.yaml, not the wiring.</text>
+  <text x="565" y="824" class="s">A replaced motor changes it. Re-check with the robot</text>
+  <text x="565" y="842" class="s">software stopped and the wheels off the ground:</text>
   <text x="565" y="864" class="s b">pixi run -e robot can-identify</text>
   <text x="565" y="886" class="s">Each motor moves about 5° out and back; answer which</text>
   <text x="565" y="904" class="s">joint moved. With --write the tool updates motors.yaml.</text>

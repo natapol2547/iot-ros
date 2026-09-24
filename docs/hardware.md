@@ -13,8 +13,8 @@ configuration, the gizmo, the IMU, how the motors are stopped, and troubleshooti
 | Part | Connection | ROS side |
 | --- | --- | --- |
 | Raspberry Pi 4 Model B | 5.1 V from a buck converter | Everything runs in the `robot` pixi environment |
-| 2 × CubeMars AK45-10 (V2.0, servo mode) for the wheels, CAN IDs 10 (left) and 11 (right) | USB-CAN adapter with native SocketCAN (`gs_usb`), 1 Mbit/s, `can0` | `cubemars_hardware_safe` in `ros2_control_node`: `WheelSystem`, `diff_drive_controller` |
-| 2 × CubeMars AK45-10 for the gizmo (pan/tilt), CAN IDs 12 (yaw) and 13 (pitch) | Same CAN bus | `GizmoSystem`, `gizmo_controller` |
+| 2 × CubeMars AK45-10 (V2.0, servo mode) for the wheels, CAN IDs 12 (left) and 13 (right) | USB-CAN adapter with native SocketCAN (`gs_usb`), 1 Mbit/s, `can0` | `cubemars_hardware_safe` in `ros2_control_node`: `WheelSystem`, `diff_drive_controller` |
+| 2 × CubeMars AK45-10 for the gizmo (pan/tilt), CAN IDs 10 (yaw) and 11 (pitch) | Same CAN bus | `GizmoSystem`, `gizmo_controller` |
 | Raspberry Pi Camera v2.1 (IMX219) on the gizmo | 15-pin ribbon to the Pi's CAMERA connector | `camera_ros` → `/camera/image_raw`, `/camera/camera_info` |
 | Nucleo-F401RE with 2 × HC-SR04P | ST-LINK USB, `/dev/stm32`, 115200 8N1 | `stm32_bridge` → `/ultrasonic/left`, `/ultrasonic/right`, `/battery_state` |
 | LSM9DS1 IMU | Pi I2C bus 1 (header pins 1, 3, 5, 9) | `lsm9ds1_node` → `/imu/data_raw`, `/imu/mag`; `imu_filter_madgwick` → `/imu/data` |
@@ -25,8 +25,9 @@ only reads sensors (the two ultrasonic sensors and, optionally, the battery volt
 drives no motors.
 
 The CAN IDs come from `src/iot_robot_bringup/config/motors.yaml`
-([motors.yaml](#motorsyaml)). Which ID sits on which joint is assumed until
-`can-identify` has confirmed it.
+([motors.yaml](#motorsyaml)). Which ID sits on which joint was confirmed against the
+hardware on 2026-09-24; `can-identify` re-checks it after a motor is replaced or given a
+new ID.
 
 `robot.launch.py` in `iot_robot_bringup` starts all of it, plus `robot_state_publisher`,
 `twist_mux` and the web controller:
@@ -269,7 +270,7 @@ CAN bitrate. The CAN bus runs at 1 Mbit/s, and nothing on the Pi uses 921600.
 | Setting | Value | Why |
 | --- | --- | --- |
 | Mode | Servo mode | MIT (force control) mode uses a different CAN protocol |
-| CAN ID | 10 left wheel, 11 right wheel, 12 gizmo yaw, 13 gizmo pitch | Must match `motors.yaml`. Any unique ID from 1 to 254 works; new motors ship with ID 1 |
+| CAN ID | 10 gizmo yaw, 11 gizmo pitch, 12 left wheel, 13 right wheel | Must match `motors.yaml`. Any unique ID from 1 to 254 works; new motors ship with ID 1 |
 | CAN bitrate | 1 Mbit/s | The default; must match `can0` |
 | Send status over CAN (`send_can_status`) | Enabled | Without it there is no position or velocity feedback, and the pre-flight check fails |
 | Status upload frequency | 100 to 200 Hz | At least the controller manager's 50 Hz, or the driver warns about missing frames every cycle; `can-check` warns below 50 Hz. The plugin stops a component when one of its motors sends nothing for 100 ms (`status_timeout_ms`) |
@@ -295,26 +296,29 @@ the service's stop step all read it.
 ```yaml
 motors:
   wheel_joint_left:
-    can_id: 10
+    can_id: 12
     direction: 1
   wheel_joint_right:
-    can_id: 11
+    can_id: 13
     direction: -1
   gizmo_yaw_joint:
-    can_id: 12
+    can_id: 10
     direction: 1
     zero_on_start: true
   gizmo_pitch_joint:
-    can_id: 13
+    can_id: 11
     direction: 1
     zero_on_start: true
 ```
 
-- `can_id`: the ID set on the motor with the R-Link, 1 to 254, unique on the bus.
+- `can_id`: the ID set on the motor with the R-Link, 1 to 254, unique on the bus. The
+  four values above were confirmed against the hardware on 2026-09-24; re-check them
+  with `can-identify` after a motor is replaced or given a new ID.
 - `direction`: `1` or `-1`, so that a positive command moves the joint in its positive
   URDF direction: the wheels drive the robot forward, yaw turns the camera left
   (counter-clockwise seen from above), pitch tilts it down. The plugin applies it to
-  every command and state.
+  every command and state. Unlike `can_id`, these four values are still assumptions:
+  check each one with `cubemars_tool jog` ([todo.md](todo.md#units-and-direction)).
 - `zero_on_start`: gizmo joints only. The pose at software start becomes the zero
   ([The gizmo](#the-gizmo)).
 
@@ -332,9 +336,13 @@ software stopped (`check`, `watch` and `stop` also work while it runs). It reads
 and joint names from `motors.yaml`. Options before the command: `--interface` (default
 `can0`), `--motors PATH`.
 
+Two orders are in use, so a list of IDs is not always ascending. `check` and `stop`, and
+the launch's own stop line, follow the joints — wheels first, then the gizmo — so their
+IDs read 12, 13, 10, 11. `watch` and `identify` go by CAN ID instead: 10, 11, 12, 13.
+
 | Command | pixi task | What it does |
 | --- | --- | --- |
-| `check` | `can-check` | Checks the link and lists every motor heard: state (`ok`, `FAULT`, `MISSING`, `UNEXPECTED` for an ID not in `motors.yaml`), values and status rate. Ends with `OK: can0 is up and motors 10, 11, 12, 13 respond`, or `FAIL:` with the IDs it did hear. `--gizmo-mode fixed` checks the wheels only |
+| `check` | `can-check` | Checks the link and lists every motor heard: state (`ok`, `FAULT`, `MISSING`, `UNEXPECTED` for an ID not in `motors.yaml`), values and status rate. Ends with `OK: can0 is up and motors 12, 13, 10, 11 respond`, or `FAIL:` with the IDs it did hear. `--gizmo-mode fixed` checks the wheels only, and ends with `OK: can0 is up and motors 12, 13 respond` |
 | `watch` | `can-watch` | Live table of every motor: speed, position, current, temperature, fault. Only listens, so it also works while the robot runs. Values are as the motors report them, before `direction` |
 | `identify` | `can-identify` | Moves each motor about 5° out and back, then asks which joint moved and prints the mapping. `--write` saves the `can_id` values to `motors.yaml`, keeping everything else. Refuses while another program commands the motors |
 | `jog --joint NAME` (or `--id N`) | | Turns one motor at `--velocity` (default 1.0 rad/s at the output) for `--duration` (default 2 s), then says which `direction` to set. Gizmo travel is capped at 15° (`--max-gizmo-travel`) |
@@ -397,8 +405,11 @@ from `target_follower` or the web page's camera aim.
   against a hard stop because its zero was set in the wrong pose. Both values are in
   `src/iot_robot_bringup/urdf/iot_robot.urdf.xacro` and are starting values; tune them
   on the robot ([todo.md](todo.md#tuning)). The wheels have no stall guard.
-- **`gizmo_mode:=fixed`** leaves the gizmo motors out of `ros2_control`: nothing
-  commands, zeroes or checks them, and `stm32_bridge` publishes both gizmo joints at 0.
+- **`gizmo_mode:=fixed`** leaves the gizmo motors (CAN IDs 10 and 11) out of
+  `ros2_control`: nothing commands, zeroes or checks them, and `stm32_bridge` publishes
+  both gizmo joints at 0. The CAN pre-flight check and the launch's own stop then cover
+  the wheels only, CAN IDs 12 and 13. `cubemars_tool stop`, which the systemd service
+  runs after every stop, still covers all four plus anything else it hears.
 
 ## Stopping the motors
 
@@ -447,7 +458,7 @@ To stop the motors by hand, for example after an interrupted bench test:
 
 ```bash
 pixi run -e robot ros2 run iot_robot_drivers cubemars_tool stop                  # motors.yaml IDs and any heard
-pixi run -e robot ros2 run iot_robot_drivers cubemars_tool --interface can0 stop --ids 10 11
+pixi run -e robot ros2 run iot_robot_drivers cubemars_tool --interface can0 stop --ids 12 13   # the two wheels only
 ```
 
 ## Running at boot
@@ -539,7 +550,7 @@ interface; it refuses to run on a real CAN interface):
 
 ```bash
 sudo ip link add vcan0 type vcan && sudo ip link set vcan0 up
-pixi run -e robot ros2 run iot_robot_drivers fake_cubemars --interface vcan0 --position 12=20
+pixi run -e robot ros2 run iot_robot_drivers fake_cubemars --interface vcan0 --position 10=20
 pixi run -e robot robot can_interface:=vcan0 camera:=false        # second terminal
 ```
 
@@ -554,7 +565,7 @@ motor, a stall and a failed zero; `--help` lists them all.
 | Launch exits: `Invalid motor configuration ...` with a list | `motors.yaml` has a missing joint, a bad or duplicate `can_id`, or a bad `direction` | Fix the listed lines ([motors.yaml](#motorsyaml)) |
 | Launch exits: `CAN interface 'can0' does not exist` | Adapter unplugged, or not a SocketCAN adapter | [CAN adapter](#can-adapter) |
 | Launch exits: `CAN interface 'can0' is down` | Bitrate never configured | `pixi run -e robot can-up`, or `sudo deploy/install.sh` |
-| Launch exits: `No status frames from gizmo_pitch_joint (CAN ID 13) ...` followed by `Status frames were heard from ... CAN ID n (not in motors.yaml)` | That motor has another ID than `motors.yaml` says | `pixi run -e robot can-identify --write`, or set its `can_id` in `motors.yaml` |
+| Launch exits: `No status frames from gizmo_pitch_joint (CAN ID 11) ...` followed by `Status frames were heard from ... CAN ID n (not in motors.yaml)` | That motor has another ID than `motors.yaml` says | `pixi run -e robot can-identify --write`, or set its `can_id` in `motors.yaml` |
 | Launch exits: `No status frames from ...` and no other IDs heard | Motors unpowered (E-stop pressed, SW1 off), status feedback disabled, wiring, termination | Release S1; `pixi run -e robot can-check`; [R-Link settings](#r-link-settings). The service retries by itself every 5 s |
 | `can0` is `ERROR-PASSIVE` or `BUS-OFF` | Nothing acknowledges frames: motors off, CANH/CANL swapped, wrong bitrate, termination | Check wiring and the 60 ohm reading, then `pixi run -e robot can-up` |
 | `No CAN message received from CAN ID` warnings every cycle, or `can-check` warns `sends status at N Hz` | Status upload slower than 50 Hz | Raise it to 100 to 200 Hz in the Upper Computer |

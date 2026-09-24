@@ -19,17 +19,17 @@ MOTORS = """\
 # Motors for the tool tests
 motors:
   wheel_joint_left:
-    can_id: 10   # assumed
+    can_id: 12   # left wheel
     direction: 1
   wheel_joint_right:
-    can_id: 11
+    can_id: 13
     direction: -1
   gizmo_yaw_joint:
-    can_id: 12
+    can_id: 10
     direction: 1
     zero_on_start: true
   gizmo_pitch_joint:
-    can_id: 13
+    can_id: 11
     direction: 1
     zero_on_start: true
 """
@@ -59,27 +59,27 @@ def answers(*replies):
 class TestWithoutBus:
     def test_ask_joint_accepts_numbers_and_names(self, capsys):
         joints = ["wheel_joint_left", "wheel_joint_right"]
-        assert cubemars_tool.ask_joint(answers("2"), 10, joints, {}) == "wheel_joint_right"
+        assert cubemars_tool.ask_joint(answers("2"), 12, joints, {}) == "wheel_joint_right"
         assert cubemars_tool.ask_joint(
-            answers("wheel_joint_left"), 10, joints, {}) == "wheel_joint_left"
-        assert cubemars_tool.ask_joint(answers("r"), 10, joints, {}) == "repeat"
-        assert cubemars_tool.ask_joint(answers("s"), 10, joints, {}) == "skip"
-        assert cubemars_tool.ask_joint(answers("q"), 10, joints, {}) == "quit"
-        assert cubemars_tool.ask_joint(answers(), 10, joints, {}) == "quit"
+            answers("wheel_joint_left"), 12, joints, {}) == "wheel_joint_left"
+        assert cubemars_tool.ask_joint(answers("r"), 12, joints, {}) == "repeat"
+        assert cubemars_tool.ask_joint(answers("s"), 12, joints, {}) == "skip"
+        assert cubemars_tool.ask_joint(answers("q"), 12, joints, {}) == "quit"
+        assert cubemars_tool.ask_joint(answers(), 12, joints, {}) == "quit"
 
     def test_ask_joint_asks_again_after_a_bad_answer(self, capsys):
         joints = ["wheel_joint_left", "wheel_joint_right"]
         ask = answers("7", "arm", "", "1")
-        assert cubemars_tool.ask_joint(ask, 10, joints, {}) == "wheel_joint_left"
+        assert cubemars_tool.ask_joint(ask, 12, joints, {}) == "wheel_joint_left"
         assert len(ask.prompts) == 4
         assert "Answer with a number from 1 to 2" in capsys.readouterr().out
 
     def test_ask_joint_refuses_a_joint_that_already_has_a_motor(self, capsys):
         joints = ["wheel_joint_left", "wheel_joint_right"]
         ask = answers("1", "2")
-        assigned = {"wheel_joint_left": 10}
-        assert cubemars_tool.ask_joint(ask, 11, joints, assigned) == "wheel_joint_right"
-        assert "wheel_joint_left is already CAN ID 10" in capsys.readouterr().out
+        assigned = {"wheel_joint_left": 12}
+        assert cubemars_tool.ask_joint(ask, 13, joints, assigned) == "wheel_joint_right"
+        assert "wheel_joint_left is already CAN ID 12" in capsys.readouterr().out
 
     def test_stop_succeeds_without_link_or_motors_file(self, capsys):
         assert cubemars_tool.main(["--interface", "nocan42", "--motors", "/nonexistent",
@@ -98,9 +98,9 @@ class TestWithoutBus:
 
     def test_check_reports_an_invalid_motors_file(self, tmp_path, capsys):
         path = tmp_path / "motors.yaml"
-        path.write_text(MOTORS.replace("can_id: 11", "can_id: 10"))
+        path.write_text(MOTORS.replace("can_id: 13", "can_id: 12"))
         assert cubemars_tool.main(["--motors", str(path), "check"]) == 1
-        assert "CAN ID 10 is given to both" in capsys.readouterr().err
+        assert "CAN ID 12 is given to both" in capsys.readouterr().err
 
 
 CAN_INTERFACE = os.environ.get("IOT_TEST_CAN_INTERFACE")
@@ -196,10 +196,11 @@ class TestCheck:
         for joint in ("wheel_joint_left", "wheel_joint_right", "gizmo_yaw_joint",
                       "gizmo_pitch_joint"):
             assert joint in out
-        assert f"OK: {CAN_INTERFACE} is up and motors 10, 11, 12, 13 respond" in out
+        # Joint order (wheels, then gizmo), the order check walks the motors in
+        assert f"OK: {CAN_INTERFACE} is up and motors 12, 13, 10, 11 respond" in out
 
     def test_flags_missing_and_unexpected_ids(self, motors_file, servos, capsys):
-        servos([10, 11, 14])
+        servos([12, 13, 14])
         assert tool(motors_file, "check", "--timeout", "0.3") == 1
         captured = capsys.readouterr()
 
@@ -207,12 +208,12 @@ class TestCheck:
             return next(line for line in captured.out.splitlines() if line.startswith(start))
         assert "MISSING" in row("gizmo_yaw_joint") and "MISSING" in row("gizmo_pitch_joint")
         assert "UNEXPECTED" in row("(not in motors.yaml)")
-        assert "gizmo_yaw_joint (CAN ID 12), gizmo_pitch_joint (CAN ID 13)" in captured.err
+        assert "gizmo_yaw_joint (CAN ID 10), gizmo_pitch_joint (CAN ID 11)" in captured.err
         assert "CAN ID 14 (not in motors.yaml)" in captured.err
         assert "can-identify" in captured.err
 
     def test_gizmo_mode_fixed_checks_the_wheels_only(self, motors_file, servos, capsys):
-        servos([10, 11, 12])
+        servos([12, 13, 10])
         assert tool(motors_file, "check", "--gizmo-mode", "fixed", "--timeout", "0.3") == 0
         out = capsys.readouterr().out
         assert "not used" in next(line for line in out.splitlines()
@@ -221,12 +222,12 @@ class TestCheck:
     def test_motor_fault_fails(self, motors_file, servos, capsys):
         servos([10, 11, 12, 13], error=4)
         assert tool(motors_file, "check", "--timeout", "0.3") == 1
-        assert "wheel_joint_left (CAN ID 10): under-voltage" in capsys.readouterr().err
+        assert "wheel_joint_left (CAN ID 12): under-voltage" in capsys.readouterr().err
 
 
 @needs_vcan
 def test_watch_labels_motors_with_joint_names(motors_file, servos, capsys):
-    servos([10, 14])
+    servos([12, 14])
     assert tool(motors_file, "watch", "--count", "1", "--rate", "4") == 0
     rows = capsys.readouterr().out.splitlines()
     assert any(row.startswith("wheel_joint_left") and " ok " in row for row in rows)
@@ -255,10 +256,11 @@ class TestStop:
         result, frames = self.collect(lambda: tool(motors_file, "stop", "--brake-time",
                                                    "0.05"))
         assert result == 0
-        ids = [10, 11, 12, 13, 20]
+        # The motors.yaml IDs in file order, then the extra motor heard on the bus
+        ids = [12, 13, 10, 11, 20]
         assert frames[:5] == [(MODE_SPEED << 8) | can_id for can_id in ids]
         assert frames[-5:] == [(MODE_CURRENT << 8) | can_id for can_id in ids]
-        assert "Motors 10, 11, 12, 13, 20" in capsys.readouterr().out
+        assert "Motors 12, 13, 10, 11, 20" in capsys.readouterr().out
 
     def test_without_motors_yaml_the_heard_motors_are_stopped(self, servos, capsys):
         servos([20])
@@ -277,14 +279,15 @@ IDENTIFY_FAST = ["identify", "--degrees", "3", "--speed", "1", "--repeat", "1"]
 class TestIdentify:
     def test_maps_every_motor_and_writes_only_the_ids(self, motors_file, servos, capsys):
         fake = servos([10, 11, 12, 13])
-        # 12 is first given a joint that 10 already has, which is refused
-        ask = answers("2", "wheel_joint_left", "2", "3", "4")
+        # identify walks the IDs in ascending order: 10 and 11 are the gizmo, 12 and 13
+        # the wheels. 13 is first given a joint that 12 already has, which is refused
+        ask = answers("3", "4", "2", "2", "1")
         assert tool(motors_file, *IDENTIFY_FAST, "--write", ask=ask) == 0
         out = capsys.readouterr().out
-        assert "wheel_joint_right is already CAN ID 10" in out
+        assert "wheel_joint_right is already CAN ID 12" in out
         assert "Wrote the new CAN IDs" in out
-        expected = MOTORS.replace("can_id: 10   # assumed", "can_id: X   # assumed") \
-            .replace("can_id: 11", "can_id: 10").replace("can_id: X", "can_id: 11")
+        expected = MOTORS.replace("can_id: 12   # left wheel", "can_id: X   # left wheel") \
+            .replace("can_id: 13", "can_id: 12").replace("can_id: X", "can_id: 13")
         assert motors_file.read_text() == expected
 
         for can_id in (10, 11, 12, 13):
@@ -297,16 +300,16 @@ class TestIdentify:
             assert fake.released(can_id)
 
     def test_without_write_the_file_is_unchanged(self, motors_file, servos, capsys):
-        servos([10, 11])
+        servos([12, 13])
         ask = answers("2", "1")
         assert tool(motors_file, *IDENTIFY_FAST, ask=ask) == 0
         assert "Not written" in capsys.readouterr().out
         assert motors_file.read_text() == MOTORS
 
     def test_a_conflicting_partial_result_is_not_written(self, motors_file, servos, capsys):
-        servos([10])
-        # CAN ID 10 is identified as the right wheel, while motors.yaml keeps 10 for the
-        # left wheel, which was not identified: two joints would share ID 10
+        servos([12])
+        # CAN ID 12 is identified as the right wheel, while motors.yaml keeps 12 for the
+        # left wheel, which was not identified: two joints would share ID 12
         assert tool(motors_file, *IDENTIFY_FAST, "--write", ask=answers("2")) == 1
         assert "not written" in capsys.readouterr().err
         assert motors_file.read_text() == MOTORS
@@ -340,14 +343,14 @@ class TestIdentify:
 
 @needs_vcan
 def test_jog_limits_gizmo_travel(motors_file, servos, capsys):
-    fake = servos([12])
+    fake = servos([10])
     assert tool(motors_file, "jog", "--joint", "gizmo_yaw_joint", "--velocity", "1.0",
                 "--duration", "2", "--max-gizmo-travel", "6") == 0
     out = capsys.readouterr().out
     assert "gizmo_yaw_joint has hard stops" in out
     assert "turn the gizmo to the left" in out
     # 6 deg at 1 rad/s is about 0.1 s: a handful of commands at 50 Hz, not 100
-    moving = [value for value in fake.speeds(12) if value]
+    moving = [value for value in fake.speeds(10) if value]
     assert 1 <= len(moving) <= 8
     assert moving[0] == pytest.approx(1336.9, abs=1)
-    assert fake.speeds(12)[-1] == 0
+    assert fake.speeds(10)[-1] == 0

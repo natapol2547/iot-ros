@@ -150,9 +150,9 @@
 <polygon fill="none" stroke="black" points="980.5,-210 980.5,-233 1061.5,-233 1061.5,-210 980.5,-210"/>
 <text text-anchor="start" x="1017" y="-217.8" font-family="arial" font-size="14.00">4</text>
 <polygon fill="none" stroke="black" points="780.5,-157 780.5,-210 1061.5,-210 1061.5,-157 780.5,-157"/>
-<text text-anchor="start" x="852.5" y="-194.8" font-family="arial" font-size="14.00">wheel_joint_left</text>
-<text text-anchor="start" x="852.5" y="-179.8" font-family="arial" font-size="14.00"> CAN ID 10 (assumed)</text>
-<text text-anchor="start" x="852.5" y="-164.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
+<text text-anchor="start" x="865" y="-194.8" font-family="arial" font-size="14.00">wheel_joint_left</text>
+<text text-anchor="start" x="865" y="-179.8" font-family="arial" font-size="14.00"> CAN ID 12</text>
+<text text-anchor="start" x="865" y="-164.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
 </g>
 <!-- W2 -->
 <g id="node9" class="node">
@@ -235,9 +235,9 @@
 <polygon fill="none" stroke="black" points="1801.5,-163 1801.5,-186 1885.5,-186 1885.5,-163 1801.5,-163"/>
 <text text-anchor="start" x="1839.5" y="-170.8" font-family="arial" font-size="14.00">4</text>
 <polygon fill="none" stroke="black" points="1594.5,-110 1594.5,-163 1885.5,-163 1885.5,-110 1594.5,-110"/>
-<text text-anchor="start" x="1672" y="-147.8" font-family="arial" font-size="14.00">wheel_joint_right</text>
-<text text-anchor="start" x="1672" y="-132.8" font-family="arial" font-size="14.00"> CAN ID 11 (assumed)</text>
-<text text-anchor="start" x="1672" y="-117.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
+<text text-anchor="start" x="1684" y="-147.8" font-family="arial" font-size="14.00">wheel_joint_right</text>
+<text text-anchor="start" x="1684" y="-132.8" font-family="arial" font-size="14.00"> CAN ID 13</text>
+<text text-anchor="start" x="1684" y="-117.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
 </g>
 <!-- W3 -->
 <g id="node10" class="node">
@@ -320,9 +320,9 @@
 <polygon fill="none" stroke="black" points="2619,-116 2619,-139 2699,-139 2699,-116 2619,-116"/>
 <text text-anchor="start" x="2655" y="-123.8" font-family="arial" font-size="14.00">4</text>
 <polygon fill="none" stroke="black" points="2419,-63 2419,-116 2699,-116 2699,-63 2419,-63"/>
-<text text-anchor="start" x="2490.5" y="-100.8" font-family="arial" font-size="14.00">gizmo_yaw_joint</text>
-<text text-anchor="start" x="2490.5" y="-85.8" font-family="arial" font-size="14.00"> CAN ID 12 (assumed)</text>
-<text text-anchor="start" x="2490.5" y="-70.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
+<text text-anchor="start" x="2503" y="-100.8" font-family="arial" font-size="14.00">gizmo_yaw_joint</text>
+<text text-anchor="start" x="2503" y="-85.8" font-family="arial" font-size="14.00"> CAN ID 10</text>
+<text text-anchor="start" x="2503" y="-70.8" font-family="arial" font-size="14.00"> bus in 1/2, out 3/4</text>
 </g>
 <!-- W4 -->
 <g id="node11" class="node">
@@ -407,7 +407,7 @@
 <text text-anchor="start" x="3476" y="-76.8" font-family="arial" font-size="14.00">4</text>
 <polygon fill="none" stroke="black" points="3232,-16 3232,-69 3522,-69 3522,-16 3232,-16"/>
 <text text-anchor="start" x="3300" y="-53.8" font-family="arial" font-size="14.00">gizmo_pitch_joint</text>
-<text text-anchor="start" x="3300" y="-38.8" font-family="arial" font-size="14.00"> CAN ID 13 (assumed)</text>
+<text text-anchor="start" x="3300" y="-38.8" font-family="arial" font-size="14.00"> CAN ID 11</text>
 <text text-anchor="start" x="3300" y="-23.8" font-family="arial" font-size="14.00"> bus in 1/2, terminator 3/4</text>
 </g>
 <!-- W5 -->

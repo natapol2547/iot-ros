@@ -5,10 +5,10 @@ name:
 
     motors:
       wheel_joint_left:
-        can_id: 10
+        can_id: 12
         direction: 1
       gizmo_yaw_joint:
-        can_id: 12
+        can_id: 10
         direction: 1
         zero_on_start: true
 

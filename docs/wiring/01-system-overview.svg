@@ -122,22 +122,22 @@
   <rect class="box act" x="870" y="290" width="150" height="100" rx="8"/>
   <text x="945" y="318" class="h" text-anchor="middle">LEFT wheel</text>
   <text x="945" y="340" class="t" text-anchor="middle">AK45-10</text>
-  <text x="945" y="362" class="t" text-anchor="middle">ID 10 (assumed)</text>
+  <text x="945" y="362" class="t" text-anchor="middle">ID 12</text>
 
   <rect class="box act" x="1050" y="290" width="150" height="100" rx="8"/>
   <text x="1125" y="318" class="h" text-anchor="middle">RIGHT wheel</text>
   <text x="1125" y="340" class="t" text-anchor="middle">AK45-10</text>
-  <text x="1125" y="362" class="t" text-anchor="middle">ID 11 (assumed)</text>
+  <text x="1125" y="362" class="t" text-anchor="middle">ID 13</text>
 
   <rect class="box act" x="1240" y="290" width="150" height="100" rx="8"/>
   <text x="1315" y="318" class="h" text-anchor="middle">gizmo YAW</text>
   <text x="1315" y="340" class="t" text-anchor="middle">AK45-10</text>
-  <text x="1315" y="362" class="t" text-anchor="middle">ID 12 (assumed)</text>
+  <text x="1315" y="362" class="t" text-anchor="middle">ID 10</text>
 
   <rect class="box act" x="1420" y="290" width="150" height="100" rx="8"/>
   <text x="1495" y="318" class="h" text-anchor="middle">gizmo PITCH</text>
   <text x="1495" y="340" class="t" text-anchor="middle">AK45-10</text>
-  <text x="1495" y="362" class="t" text-anchor="middle">ID 13 (assumed)</text>
+  <text x="1495" y="362" class="t" text-anchor="middle">ID 11</text>
 
   <rect class="flag" x="1420" y="430" width="150" height="40" rx="4"/>
   <text x="1495" y="447" class="s" text-anchor="middle">R_T 120 Ω</text>

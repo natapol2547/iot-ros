@@ -50,24 +50,30 @@ R-Link's COM port at **921600 baud**. Details:
 | Setting in the Upper Computer | Value |
 | --- | --- |
 | Mode | Servo mode |
-| CAN ID | 10 left wheel, 11 right wheel, 12 gizmo yaw, 13 gizmo pitch |
+| CAN ID | 10 gizmo yaw, 11 gizmo pitch, 12 left wheel, 13 right wheel |
 | CAN bitrate | 1 Mbit/s |
 | Send status over CAN (`send_can_status`) | Enabled |
 | Status upload frequency | 100 to 200 Hz (more also works) |
 | CAN communication timeout (`timeout_msec`) | 200 to 300 ms. **Required** |
 | Brake current after the timeout (`timeout_brake_current`) | 0 (freewheel) or about 1 A |
 
-- [ ] Left wheel motor: settings above, CAN ID 10. Label the motor "10".
-- [ ] Right wheel motor: CAN ID 11, label "11".
-- [ ] Gizmo yaw motor: CAN ID 12, label "12".
-- [ ] Gizmo pitch motor: CAN ID 13, label "13".
+The four motors already carry these IDs: the mapping was confirmed against the hardware
+on 2026-09-24. So the CAN ID is a check below, not a change; the other settings in the
+table still have to be made on each motor.
+
+- [ ] Gizmo yaw motor: settings above; the Upper Computer shows CAN ID 10. Label the
+      motor "10".
+- [ ] Gizmo pitch motor: settings above; CAN ID 11, label "11".
+- [ ] Left wheel motor: settings above; CAN ID 12, label "12".
+- [ ] Right wheel motor: settings above; CAN ID 13, label "13".
 - [ ] Write down the firmware version the program shows for each motor.
 - [ ] **Decision:** brake current after the CAN timeout. 0 (recommended) lets the robot
       roll out when the Pi or the link dies; a small braking current stops it sooner but
       also holds against pushing.
 
-The IDs only have to be unique (1 to 254). If a motor ends up with another ID, that is
-fixed in software in step 6, not here.
+The IDs only have to be unique (1 to 254). A replacement motor arrives with CAN ID 1:
+either give it the ID of the motor it replaces here, before it joins the bus, or leave
+its ID alone and record the new mapping in software in step 6.
 
 ## 3. Raspberry Pi 4
 
@@ -152,8 +158,9 @@ software must not be running (`systemctl is-active iot-robot` says `inactive`).
 - [ ] Release S1: all four drive LEDs light blue.
 - [ ] `ip -details link show can0`: `can state ERROR-ACTIVE`, `bitrate 1000000`.
 - [ ] `pixi run -e robot can-check`: one row per motor, state `ok`, 100-200 frames/s,
-      ending in `OK: can0 is up and motors 10, 11, 12, 13 respond`. If a motor is
-      missing, the output also lists the IDs it did hear; continue with the next step.
+      ending in `OK: can0 is up and motors 12, 13, 10, 11 respond` (the tool lists the
+      motors by joint, wheels first, not in numerical order). If a motor is missing, the
+      output also lists the IDs it did hear; continue with the next step.
 
 ### Which motor is which ID
 
@@ -162,13 +169,18 @@ The mapping from CAN ID to joint lives in one file,
 and the service's stop step all read it. The build installs it as a link to the source
 file, so an edit takes effect at the next start of the robot, without a rebuild.
 
+The file already holds the mapping confirmed against the hardware on 2026-09-24:
+10 gizmo yaw, 11 gizmo pitch, 12 left wheel, 13 right wheel. The run below confirms it
+again on this machine, and is the way to re-check it whenever a motor is replaced or
+given a new ID.
+
 - [ ] `pixi run -e robot can-identify`. Each motor in turn moves about 5° out and back
       twice, then goes limp; answer which joint moved (its number or name; `r` repeats,
       `s` skips, `q` quits). The tool refuses to run while the robot software is
       commanding the motors.
-- [ ] If the result differs from `motors.yaml`: `pixi run -e robot can-identify --write`
-      saves the new `can_id` values and keeps the rest of the file. Or edit `can_id` in
-      `motors.yaml` by hand.
+- [ ] The result matches `motors.yaml`. If it does not: `pixi run -e robot can-identify
+      --write` saves the new `can_id` values and keeps the rest of the file. Or edit
+      `can_id` in `motors.yaml` by hand.
 - [ ] Label each motor with its joint as well as its ID.
 
 `can-identify` and `can-watch` run `cubemars_tool identify` and `cubemars_tool watch`
@@ -260,7 +272,7 @@ range, where the stall guard stops it.
 - [ ] Web E-stop: press STOP; the wheels stop within 0.5 s and ignore the joystick.
 - [ ] Ctrl-C while a wheel turns: the wheels stop at once. The log shows
       `Stopping the motors of WheelSystem` and `... GizmoSystem`, then
-      `Sent zero speed and release to motors [10, 11, 12, 13] on can0`.
+      `Sent zero speed and release to motors [12, 13, 10, 11] on can0`.
 - [ ] Motor watchdog: start again (gizmo at its zero pose), release the web E-stop,
       drive, and press S1. Both components log `No status frames from the motor on ...`
       and stop. Then recover as in [checklist.md](checklist.md#during-use).
@@ -283,7 +295,7 @@ range, where the stall guard stops it.
 - [ ] Gizmo at its zero pose (the service zeroes it as it starts), then
       `sudo systemctl enable --now iot-robot` and `journalctl -u iot-robot -f`.
 - [ ] `sudo systemctl stop iot-robot`: the journal shows the stop lines from the
-      Ctrl-C test and `Motors 10, 11, 12, 13 on can0: zero speed for 0.3 s, then released`.
+      Ctrl-C test and `Motors 12, 13, 10, 11 on can0: zero speed for 0.3 s, then released`.
 - [ ] Reboot with S1 pressed and follow [checklist.md](checklist.md) once from the top.
 - [ ] Calibrate the camera ([hardware.md, Camera calibration](hardware.md#camera-calibration)).
 - [ ] Measure the person-detector rate on the Pi 4 (`pixi run -e robot ros2 topic hz

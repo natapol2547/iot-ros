@@ -12,7 +12,7 @@ The whole ROS environment is managed by [pixi](https://pixi.sh) using
 | Part | Details |
 | --- | --- |
 | Computer | Raspberry Pi 4 Model B, running the `robot` pixi environment |
-| Motors | 4 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) on a 1 Mbit/s CAN bus through a native SocketCAN USB-CAN adapter: the two wheels (CAN IDs 10 and 11) and the gizmo's yaw and pitch (12 and 13), set in [`motors.yaml`](src/iot_robot_bringup/config/motors.yaml) |
+| Motors | 4 × CubeMars AK45-10 (10:1, 7 N·m peak, 180 rpm output) on a 1 Mbit/s CAN bus through a native SocketCAN USB-CAN adapter: the two wheels (CAN IDs 12 and 13) and the gizmo's yaw and pitch (10 and 11), set in [`motors.yaml`](src/iot_robot_bringup/config/motors.yaml) |
 | Camera | Raspberry Pi Camera v2.1 (IMX219, 62.2° × 48.8° FOV) on the pan/tilt "gizmo" |
 | Range | 2 × HC-SR04P ultrasonic sensors angled ±45° forward, read by a Nucleo-F401RE (STM32) over USB serial |
 | IMU | LSM9DS1 on the Pi's I2C bus |
@@ -119,7 +119,7 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `fake-stm32` | A fake Nucleo on a pseudo-terminal, for testing without the board (`--fault left` fakes an unplugged sensor) |
 | `can-up` | Brings `can0` up at 1 Mbit/s by hand |
 | `can-check` | Checks that `can0` is up and every motor in `motors.yaml` sends status frames |
-| `can-identify` | Moves one motor at a time a few degrees and asks which joint moved, to find which CAN ID is which joint; `--write` saves the answer to `motors.yaml` |
+| `can-identify` | Moves one motor at a time a few degrees and asks which joint moved, to check which CAN ID is which joint; `--write` saves the answer to `motors.yaml` |
 | `can-watch` | Live position, speed, current, temperature and fault of every motor, labelled with its joint |
 | `robot` | `robot` environment only: the full real-robot launch |
 
@@ -255,7 +255,7 @@ Other useful topics and services:
   - [x] Nucleo firmware ([iot-stm32](https://github.com/natapol2547/iot-stm32)), host-tested
   - [x] Wiring diagrams and parts list ([docs/wiring.md](docs/wiring.md))
   - [ ] Wire it up and work through the one-time setup in [docs/todo.md](docs/todo.md): R-Link
-        settings, which motor is which ID, directions, gizmo zero pose, IMU pose
+        settings, the CAN ID check, directions, gizmo zero pose, IMU pose
   - [ ] Check `pole_pairs`, the stall guard, wheel radius and separation on the real robot
   - [ ] Battery capacity (TBD)
 
@@ -566,7 +566,7 @@ sudo deploy/install.sh        # udev rule for /dev/stm32, can0 at boot, I2C, iot
 
 # Then
 pixi run -e robot can-check      # every motor in motors.yaml answers on can0
-pixi run -e robot can-identify   # which motor is which CAN ID (once; service stopped)
+pixi run -e robot can-identify   # re-check which motor is which CAN ID (service stopped)
 pixi run -e robot robot          # everything; the web page is on http://<pi>.local:8080
 ```
 

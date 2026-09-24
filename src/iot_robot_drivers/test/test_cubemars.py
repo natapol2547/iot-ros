@@ -134,16 +134,16 @@ class TestBus:
         assert "can-identify" in str(err.value)
 
     def test_preflight_labels_motors_with_their_joints(self):
-        motors = FakeMotors(CAN_INTERFACE, [10, 12])
-        names = {10: "wheel_joint_left", 11: "wheel_joint_right", 12: "gizmo_yaw_joint"}
+        motors = FakeMotors(CAN_INTERFACE, [12, 10])
+        names = {12: "wheel_joint_left", 13: "wheel_joint_right", 10: "gizmo_yaw_joint"}
         try:
             with pytest.raises(CanCheckError) as err:
-                preflight(CAN_INTERFACE, [10, 11], timeout=0.5, names=names)
+                preflight(CAN_INTERFACE, [12, 13], timeout=0.5, names=names)
         finally:
             motors.stop()
         # A motors.yaml motor that is not in use is named, not called unexpected
-        assert "from wheel_joint_right (CAN ID 11) on" in str(err.value)
-        assert "heard from gizmo_yaw_joint (CAN ID 12)." in str(err.value)
+        assert "from wheel_joint_right (CAN ID 13) on" in str(err.value)
+        assert "heard from gizmo_yaw_joint (CAN ID 10)." in str(err.value)
 
     def test_preflight_reports_motor_faults(self):
         motors = FakeMotors(CAN_INTERFACE, [1, 2], error=4)

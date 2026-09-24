@@ -10,9 +10,10 @@
 #   -> AK45-10 LEFT wheel -> AK45-10 RIGHT wheel
 #   -> AK45-10 gizmo YAW -> AK45-10 gizmo PITCH
 #   -> 120 ohm terminator (bus end B, on the gizmo).
-# CAN IDs are 10-13. The ID-to-joint mapping shown here (10 left wheel, 11 right
-# wheel, 12 gizmo yaw, 13 gizmo pitch) is ASSUMED until confirmed with
-#   pixi run -e robot can-identify
+# CAN IDs are 10-13. The ID-to-joint mapping shown here (10 gizmo yaw, 11 gizmo
+# pitch, 12 left wheel, 13 right wheel) was confirmed against the hardware on
+# 2026-09-24. A replaced motor changes it again; re-check or rewrite it with
+#   pixi run -e robot can-identify          # add --write to update motors.yaml
 # The wiring does not depend on the IDs: the mapping lives in
 # src/iot_robot_bringup/config/motors.yaml, keyed by URDF joint name.
 #
@@ -57,7 +58,7 @@ connectors:
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
       wheel_joint_left<br/>
-      CAN ID 10 (assumed)<br/>
+      CAN ID 12<br/>
       bus in 1/2, out 3/4
   MR:
     type: AK45-10 RIGHT wheel
@@ -65,7 +66,7 @@ connectors:
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
       wheel_joint_right<br/>
-      CAN ID 11 (assumed)<br/>
+      CAN ID 13<br/>
       bus in 1/2, out 3/4
   MY:
     type: AK45-10 gizmo YAW
@@ -73,7 +74,7 @@ connectors:
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
       gizmo_yaw_joint<br/>
-      CAN ID 12 (assumed)<br/>
+      CAN ID 10<br/>
       bus in 1/2, out 3/4
   MP:
     type: AK45-10 gizmo PITCH
@@ -81,7 +82,7 @@ connectors:
     pinlabels: [CAN_L, CAN_H, CAN_H, CAN_L]
     notes: >-
       gizmo_pitch_joint<br/>
-      CAN ID 13 (assumed)<br/>
+      CAN ID 11<br/>
       bus in 1/2, terminator 3/4
   RT:
     type: 120 Ω resistor

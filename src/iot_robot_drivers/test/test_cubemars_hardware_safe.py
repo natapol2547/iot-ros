@@ -53,7 +53,7 @@ URDF = os.path.join(BRINGUP, "urdf", "iot_robot.urdf.xacro")
 CONTROLLERS = os.path.join(BRINGUP, "config", "controllers.yaml")
 DOMAIN_ID = int(os.environ.get("IOT_TEST_ROS_DOMAIN_ID", "91"))
 
-LEFT, RIGHT, YAW, PITCH = 10, 11, 12, 13
+LEFT, RIGHT, YAW, PITCH = 12, 13, 10, 11
 MOTOR_IDS = (LEFT, RIGHT, YAW, PITCH)
 ERPM_PER_RAD_S = 14 * 10 * 60.0 / (2.0 * math.pi)
 WHEEL_RADIUS = 0.0754
@@ -64,10 +64,10 @@ GIZMO_VELOCITY = 1.0
 
 MOTORS_YAML = """\
 motors:
-  wheel_joint_left: {{can_id: 10, direction: 1}}
-  wheel_joint_right: {{can_id: 11, direction: -1}}
-  gizmo_yaw_joint: {{can_id: 12, direction: {yaw_direction}, zero_on_start: true}}
-  gizmo_pitch_joint: {{can_id: 13, direction: 1, zero_on_start: true}}
+  wheel_joint_left: {{can_id: 12, direction: 1}}
+  wheel_joint_right: {{can_id: 13, direction: -1}}
+  gizmo_yaw_joint: {{can_id: 10, direction: {yaw_direction}, zero_on_start: true}}
+  gizmo_pitch_joint: {{can_id: 11, direction: 1, zero_on_start: true}}
 """
 ALL_CONTROLLERS = ("joint_state_broadcaster", "diff_drive_controller", "gizmo_controller")
 
@@ -393,7 +393,7 @@ def test_deactivating_a_controller_stops_the_motors_it_drove(start_robot):
     since = time.monotonic()
     assert robot.switch_controllers(deactivate=["diff_drive_controller"])
     assert_stopped(robot, (LEFT, RIGHT), since)
-    assert ("No controller commands wheel_joint_left (CAN ID 10) any more: zero speed for "
+    assert ("No controller commands wheel_joint_left (CAN ID 12) any more: zero speed for "
             "300 ms, then release" in robot.log())
     robot.spin(0.3)
     # Nothing more for the wheels; the gizmo keeps holding its position
@@ -430,7 +430,7 @@ def test_a_gizmo_fault_stops_both_gizmo_motors_and_leaves_the_wheels(start_robot
     robot.fake.inject_fault(PITCH, 7)
     robot.drive(linear=0.2, seconds=1.5)
     assert_stopped(robot, (YAW, PITCH), since)
-    assert "gizmo_pitch_joint (CAN ID 13) reports fault 7: motor stall" in robot.log()
+    assert "gizmo_pitch_joint (CAN ID 11) reports fault 7: motor stall" in robot.log()
     assert robot.hardware_states() == {"WheelSystem": "active", "GizmoSystem": "unconfigured"}
     controllers = robot.controller_states()
     assert controllers["diff_drive_controller"] == "active"
@@ -453,7 +453,7 @@ def test_a_silent_wheel_motor_stops_both_wheels_and_leaves_the_gizmo(start_robot
     robot.fake.silence(RIGHT)
     robot.drive(linear=0.2, seconds=1.0)
     assert_stopped(robot, (LEFT, RIGHT), since)
-    assert "No status frames from the motor on wheel_joint_right (CAN ID 11)" in robot.log()
+    assert "No status frames from the motor on wheel_joint_right (CAN ID 13)" in robot.log()
     assert robot.hardware_states() == {"WheelSystem": "unconfigured", "GizmoSystem": "active"}
     controllers = robot.controller_states()
     assert controllers["diff_drive_controller"] == "inactive"
@@ -482,7 +482,7 @@ def test_a_failed_zero_names_the_joint_and_stops_the_gizmo(start_robot):
     robot.wait(lambda: robot.control.poll() is not None, 15.0,
                "ros2_control_node kept running after a failed activation")
     assert robot.control.returncode != 0
-    assert ("Could not zero gizmo_yaw_joint (CAN ID 12): it reads 30.0 deg"
+    assert ("Could not zero gizmo_yaw_joint (CAN ID 10): it reads 30.0 deg"
             in robot.log())
     for can_id in (YAW, PITCH):
         assert ends_with_stop(robot.fake.commands(can_id))
@@ -501,7 +501,7 @@ def test_the_stall_guard_stops_a_blocked_gizmo(start_robot):
     robot.spawn(*ALL_CONTROLLERS)
     robot.point_gizmo(0.5, 0.0)
     robot.wait(lambda: "has pushed with" in robot.log(), 5.0, "the stall guard did not trip")
-    assert "gizmo_yaw_joint (CAN ID 12) has pushed with 1.27 Nm" in robot.log()
+    assert "gizmo_yaw_joint (CAN ID 10) has pushed with 1.27 Nm" in robot.log()
     first_position = robot.fake.commands(YAW, MODE_POSITION)[0].time
     assert_stopped(robot, (YAW, PITCH), first_position)
     stop = robot.fake.commands(YAW, MODE_SPEED)[0].time

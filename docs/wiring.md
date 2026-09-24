@@ -64,7 +64,7 @@ for every session (power-on order, gizmo zero pose, E-stop recovery) is
 
 | Part | Qty | Notes |
 |---|---|---|
-| CubeMars AK45-10 KV75 actuator | 4 | Original (V2.0) version: separate XT30 power and 4-pin CAN connectors. Set to CAN IDs 10, 11, 12 and 13; which ID drives which joint is **assumed**, see [CAN IDs](#can-ids-and-the-joint-mapping). Each motor ships with a 16 AWG XT30 power lead and CAN plugs. |
+| CubeMars AK45-10 KV75 actuator | 4 | Original (V2.0) version: separate XT30 power and 4-pin CAN connectors. Set to CAN IDs 10 (gizmo yaw), 11 (gizmo pitch), 12 (left wheel) and 13 (right wheel), confirmed against the hardware on 2026-09-24, see [CAN IDs](#can-ids-and-the-joint-mapping). Each motor ships with a 16 AWG XT30 power lead and CAN plugs. |
 | USB-CAN adapter ("usb2can") | 1 | Native SocketCAN (gs_usb), appears as `can0`. Check whether it has a built-in 120 Ω terminator and whether it is isolated, see [Termination check](#termination-check). |
 | Raspberry Pi 4 | 1 | |
 | Raspberry Pi Camera Module v2.1 (Sony IMX219) | 1 | Ships with a 150 mm Standard-Standard ribbon, which fits the Pi 4. |
@@ -423,19 +423,26 @@ disabled.
 
 ### CAN IDs and the joint mapping
 
-The four motors are set to CAN IDs **10, 11, 12 and 13**, at 1 Mbit/s. Which ID sits
-on which joint is **assumed** until confirmed: 10 left wheel, 11 right wheel, 12 gizmo
-yaw, 13 gizmo pitch.
+The four motors are set to CAN IDs **10, 11, 12 and 13**, at 1 Mbit/s. Which ID sits on
+which joint was **confirmed against the hardware on 2026-09-24**:
+
+| CAN ID | Joint | Place in the daisy chain |
+|---|---|---|
+| 10 | `gizmo_yaw_joint` | third |
+| 11 | `gizmo_pitch_joint` | fourth (bus end B, carries R_T) |
+| 12 | `wheel_joint_left` | first, next to the adapter |
+| 13 | `wheel_joint_right` | second |
 
 The wiring does not depend on the mapping: every motor sees the whole bus, so any
-motor can sit anywhere in the chain. The mapping lives in one file,
+motor can sit anywhere in the chain. The chain order above is only how this robot is
+built. The mapping lives in one file,
 `src/iot_robot_bringup/config/motors.yaml`, keyed by URDF joint name, together with
 each motor's direction. `robot.launch.py`, `cubemars_tool` and the systemd stop step
 all read it. Moving a motor to another place in the chain needs no software change;
 moving it to another joint needs `motors.yaml`.
 
-Confirm the mapping once, with the robot software stopped, the wheels off the ground
-and the gizmo free to move:
+Re-check the mapping whenever a motor is replaced or given a new ID, with the robot
+software stopped, the wheels off the ground and the gizmo free to move:
 
 ```bash
 pixi run -e robot can-identify            # asks which joint moved, prints the mapping
@@ -464,7 +471,9 @@ ID 1, so set the ID before the motor joins the bus, one motor at a time [[akdrv]
    `can-identify --write` once all motors are on the bus.
 
 Direction is a `motors.yaml` setting, not a wiring change: the drive commutates
-internally, so swapping motor leads cannot reverse it.
+internally, so swapping motor leads cannot reverse it. Unlike the CAN IDs, the four
+`direction` values in the file are still assumptions: confirm each one with
+`cubemars_tool jog --joint <name>` ([todo.md](todo.md#units-and-direction)).
 
 ### Bringing up can0
 
@@ -758,8 +767,9 @@ Work through this with the battery **disconnected** unless a step says otherwise
 - [ ] No Nucleo pin other than CN6-5 and CN6-6 (or CN6-4 with the 3.3 V sensor option)
       connects to a supply rail. CN6-8 (VIN) and CN10-8 (U5V) are unused.
 - [ ] IMU on Pi pins 1, 3, 5 and 9. Nothing but the A2 feed on pins 2 and 4.
-- [ ] Each motor is labelled with its CAN ID (10-13). The joint mapping is still
-      assumed until `can-identify` has run.
+- [ ] Each motor is labelled with its CAN ID (10-13) and its joint: 10 gizmo yaw,
+      11 gizmo pitch, 12 left wheel, 13 right wheel
+      ([CAN IDs](#can-ids-and-the-joint-mapping)).
 - [ ] Turn the gizmo by hand through both yaw limits and the full pitch range. The
       power leads, W4 and the camera ribbon follow without pulling or snagging.
 - [ ] Camera ribbon seated at both ends with both flaps closed.
@@ -782,9 +792,10 @@ Work through this with the battery **disconnected** unless a step says otherwise
 - [ ] `i2cdetect -y 1` shows `1e` and `6b`.
 - [ ] Release the E-stop: all four drive LEDs light blue. `pixi run -e robot can-check`
       finds IDs 10-13, and the motors do not move on their own.
-- [ ] With the robot software not running, confirm the joint mapping:
-      `pixi run -e robot can-identify --write`. Do this before any jog by joint name:
-      with a wrong mapping, a wheel command could go to a gizmo motor.
+- [ ] With the robot software not running, confirm the joint mapping still matches
+      `motors.yaml`: `pixi run -e robot can-identify` (add `--write` if it differs).
+      Do this before any jog by joint name: with a wrong mapping, a wheel command could
+      go to a gizmo motor.
 - [ ] Check each joint's direction with `cubemars_tool jog --joint <name>` (see
       [todo.md](todo.md)). Gizmo jogs are limited to 15° of travel.
 - [ ] With the robot software not running, start a slow 20 s wheel jog:
@@ -810,7 +821,7 @@ off; charge the LiPo with a balance charger, attended, and stop using it at 21 V
 | Item | Assumed here | What changes if different |
 |---|---|---|
 | Battery capacity | 6S LiPo with XT60, capacity unknown | Run time only; the wiring and fuses stay the same. Check that the pack's continuous rating (capacity x C rating) covers at least 15 A. |
-| CAN ID to joint mapping | 10 left wheel, 11 right wheel, 12 gizmo yaw, 13 gizmo pitch | Nothing to rewire: run `pixi run -e robot can-identify --write`, see [CAN IDs](#can-ids-and-the-joint-mapping). |
+| Motor directions | `direction` in `motors.yaml`: 1 for the left wheel and both gizmo joints, -1 for the right wheel | Still unchecked, unlike the CAN ID mapping. Nothing to rewire: check each joint with `cubemars_tool jog --joint <name>` and flip the ones that turn the wrong way, see [todo.md](todo.md#units-and-direction). |
 | Built-in CAN terminator in the drives | None (CubeMars documents none) | If a bare drive reads about 120 Ω, four terminators load the bus to about 30 Ω. Ask CubeMars before driving. See [Termination check](#termination-check). |
 | USB-CAN adapter terminator and isolation | Built-in 120 Ω, switched on; not isolated | No terminator: fit a 120 Ω at the adapter end. Isolated: the GND wire (drawn anyway) becomes mandatory. |
 | Buck converter model | 5.1 V, 3 A or more, 30 V+ input, non-isolated; over-voltage protection only needed for option A2 | Under 3 A: undervoltage warnings under load. Input under 30 V: not safe on 6S. No over-voltage protection: use option A1 only. |

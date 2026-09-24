@@ -16,18 +16,18 @@ GOOD = textwrap.dedent("""\
     # Header comment
     motors:
       wheel_joint_left:
-        can_id: 10   # left
+        can_id: 12   # left
         direction: 1
       wheel_joint_right:
-        can_id: 11
+        can_id: 13
         direction: -1
       gizmo_yaw_joint:
-        can_id: 12
+        can_id: 10
         direction: 1
         zero_on_start: true
       gizmo_pitch_joint:
         # pitch comment
-        can_id: 13
+        can_id: 11
         direction: 1
         zero_on_start: true
     """)
@@ -54,20 +54,21 @@ class TestLoad:
 
     def test_motors_in_file_order_with_helpers(self):
         config = parse(GOOD, "test.yaml")
-        assert config.wheels == [Motor("wheel_joint_left", 10, 1),
-                                 Motor("wheel_joint_right", 11, -1)]
-        assert config.gizmo == [Motor("gizmo_yaw_joint", 12, 1, True),
-                                Motor("gizmo_pitch_joint", 13, 1, True)]
-        assert config.names() == {10: "wheel_joint_left", 11: "wheel_joint_right",
-                                  12: "gizmo_yaw_joint", 13: "gizmo_pitch_joint"}
-        assert config.joint_of(13) == "gizmo_pitch_joint"
+        assert config.wheels == [Motor("wheel_joint_left", 12, 1),
+                                 Motor("wheel_joint_right", 13, -1)]
+        assert config.gizmo == [Motor("gizmo_yaw_joint", 10, 1, True),
+                                Motor("gizmo_pitch_joint", 11, 1, True)]
+        assert config.names() == {12: "wheel_joint_left", 13: "wheel_joint_right",
+                                  10: "gizmo_yaw_joint", 11: "gizmo_pitch_joint"}
+        assert config.joint_of(11) == "gizmo_pitch_joint"
         assert config.joint_of(99) is None
         assert config.gizmo[0].is_gizmo and not config.wheels[0].is_gizmo
 
     def test_motors_in_use_depend_on_the_gizmo_mode(self):
         config = parse(GOOD, "test.yaml")
-        assert [m.can_id for m in config.in_use("can")] == [10, 11, 12, 13]
-        assert [m.can_id for m in config.in_use("fixed")] == [10, 11]
+        # Joint order (wheels, then gizmo), not CAN ID order: the wheels have the high IDs
+        assert [m.can_id for m in config.in_use("can")] == [12, 13, 10, 11]
+        assert [m.can_id for m in config.in_use("fixed")] == [12, 13]
 
     def test_gizmo_joints_are_only_required_when_used(self):
         config = parse(WHEELS_ONLY, "test.yaml")
@@ -101,16 +102,16 @@ class TestLoad:
 
 class TestValidation:
     def test_duplicate_ids_name_both_joints(self):
-        message = errors_of(GOOD.replace("can_id: 11", "can_id: 10"))
-        assert "CAN ID 10 is given to both wheel_joint_left and wheel_joint_right" in message
+        message = errors_of(GOOD.replace("can_id: 13", "can_id: 12"))
+        assert "CAN ID 12 is given to both wheel_joint_left and wheel_joint_right" in message
 
     @pytest.mark.parametrize("value", ["0", "255", "300", "-1", "ten", "true", "10.5"])
     def test_can_id_range_and_type(self, value):
-        message = errors_of(GOOD.replace("can_id: 12", f"can_id: {value}"))
+        message = errors_of(GOOD.replace("can_id: 10", f"can_id: {value}"))
         assert "gizmo_yaw_joint: can_id must be an integer from 1 to 254" in message
 
     def test_hexadecimal_ids_are_integers(self):
-        assert parse(GOOD.replace("can_id: 12", "can_id: 0x7F"), "t").joint_of(127) \
+        assert parse(GOOD.replace("can_id: 10", "can_id: 0x7F"), "t").joint_of(127) \
             == "gizmo_yaw_joint"
 
     @pytest.mark.parametrize("value", ["0", "2", "-2", "true", "1.0", "left"])
@@ -119,7 +120,7 @@ class TestValidation:
         assert "wheel_joint_right: direction must be 1 or -1" in message
 
     def test_missing_keys(self):
-        message = errors_of(GOOD.replace("    can_id: 11\n", "").replace(
+        message = errors_of(GOOD.replace("    can_id: 13\n", "").replace(
             "    direction: 1\n  wheel_joint_right", "  wheel_joint_right"))
         assert "wheel_joint_right: can_id is missing" in message
         assert "wheel_joint_left: direction is missing (1 or -1)" in message
@@ -140,12 +141,12 @@ class TestValidation:
         assert "zero_on_start must be true or false" in message
 
     def test_missing_wheel(self):
-        text = GOOD.replace("  wheel_joint_left:\n    can_id: 10   # left\n    "
+        text = GOOD.replace("  wheel_joint_left:\n    can_id: 12   # left\n    "
                             "direction: 1\n", "")
         assert "no entry for wheel_joint_left" in errors_of(text)
 
     def test_every_problem_is_listed_at_once(self):
-        message = errors_of(GOOD.replace("can_id: 13", "can_id: 999").replace(
+        message = errors_of(GOOD.replace("can_id: 11", "can_id: 999").replace(
             "direction: -1", "direction: 5"))
         assert "gizmo_pitch_joint: can_id" in message and "wheel_joint_right: direction" \
             in message
@@ -166,11 +167,11 @@ class TestWriteCanIds:
     def test_only_the_numbers_change(self, tmp_path):
         path = tmp_path / "motors.yaml"
         path.write_text(GOOD)
-        written = write_can_ids(str(path), {"wheel_joint_left": 11,
-                                            "wheel_joint_right": 10})
+        written = write_can_ids(str(path), {"wheel_joint_left": 13,
+                                            "wheel_joint_right": 12})
         assert written == str(path)
-        expected = GOOD.replace("can_id: 10   # left", "can_id: X   # left").replace(
-            "can_id: 11", "can_id: 10").replace("can_id: X", "can_id: 11")
+        expected = GOOD.replace("can_id: 12   # left", "can_id: X   # left").replace(
+            "can_id: 13", "can_id: 12").replace("can_id: X", "can_id: 13")
         assert path.read_text() == expected
 
     def test_keeps_the_file_mode(self, tmp_path):
@@ -195,8 +196,8 @@ class TestWriteCanIds:
     def test_refuses_an_assignment_that_duplicates_an_id(self, tmp_path):
         path = tmp_path / "motors.yaml"
         path.write_text(GOOD)
-        with pytest.raises(MotorConfigError, match="CAN ID 11 is given to both"):
-            write_can_ids(str(path), {"wheel_joint_left": 11})
+        with pytest.raises(MotorConfigError, match="CAN ID 13 is given to both"):
+            write_can_ids(str(path), {"wheel_joint_left": 13})
         assert path.read_text() == GOOD
         assert [p.name for p in tmp_path.iterdir()] == ["motors.yaml"]
 

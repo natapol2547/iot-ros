@@ -19,7 +19,7 @@ command line or through the FakeCubeMars class:
 
     sudo ip link add vcan0 type vcan && sudo ip link set vcan0 up
     ros2 run iot_robot_drivers fake_cubemars --interface vcan0 --ids 10 11 12 13 \\
-        --position 12=30 --fault 13=7@5
+        --position 10=30 --fault 13=7@5
 """
 
 import argparse

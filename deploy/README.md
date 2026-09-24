@@ -74,8 +74,10 @@ has no effect and no error.
 
 **Motor CAN IDs and directions are not service settings.** They live in
 `src/iot_robot_bringup/config/motors.yaml` in this checkout
-([docs/hardware.md](../docs/hardware.md#motorsyaml)). Edit that file (or run
-`pixi run -e robot can-identify --write`); the change takes effect at the next
+([docs/hardware.md](../docs/hardware.md#motorsyaml)): 10 gizmo yaw, 11 gizmo pitch,
+12 left wheel, 13 right wheel, confirmed against the hardware on 2026-09-24. Edit that
+file (or run `pixi run -e robot can-identify --write` to re-check the mapping after a
+motor is replaced or given a new ID); the change takes effect at the next
 `sudo systemctl restart iot-robot`, without a rebuild, because the build installs the
 file as a link. `IOT_MOTOR_IDS` and the launch arguments `left_can_id`, `right_can_id`,
 `left_direction` and `right_direction` no longer exist. `install.sh` keeps an existing
@@ -126,7 +128,9 @@ program.
   release, to every CAN ID in `motors.yaml` plus any other motor it hears on the bus. It
   covers the case where the launch itself dies before it can stop the motors, and does
   nothing when the CAN link is not up. The journal shows
-  `Motors 10, 11, 12, 13 on can0: zero speed for 0.3 s, then released`.
+  `Motors 12, 13, 10, 11 on can0: zero speed for 0.3 s, then released` (the tool lists
+  the IDs in `motors.yaml` order, wheels first, not in numerical order). This step
+  ignores `gizmo_mode`: it stops all four motors even when the gizmo was not driven.
 - `LimitRTPRIO=99` lets `controller_manager` use real-time (SCHED_FIFO) scheduling.
 - When NetworkManager is active (Raspberry Pi OS), `install.sh` disables
   `systemd-networkd-wait-online`. networkd then manages only `can0`, which never counts
@@ -209,7 +213,8 @@ pixi run -e robot can-check          # interface up and every motor in motors.ya
 pixi run -e robot can-watch          # live values of every motor, labelled with its joint
 ```
 
-A status frame's ID is `0x2900` plus the motor's CAN ID, so CAN ID 10 sends `0000290A`.
+A status frame's ID is `0x2900` plus the motor's CAN ID, so CAN ID 10 (gizmo yaw) sends
+`0000290A` and CAN ID 12 (left wheel) sends `0000290C`.
 
 `ERROR-PASSIVE` or `BUS-OFF` means frames are not being acknowledged: motors unpowered,
 CANH and CANL swapped, a bitrate mismatch, or missing termination. With everything

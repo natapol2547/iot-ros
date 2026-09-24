@@ -318,7 +318,7 @@ def wait_for_status(interface, can_ids, timeout):
 
 
 def describe(can_id, names=None):
-    """'wheel_joint_left (CAN ID 10)' when names knows the ID, else 'CAN ID 10'."""
+    """'wheel_joint_left (CAN ID 12)' when names knows the ID, else 'CAN ID 12'."""
     name = (names or {}).get(can_id)
     return f"{name} (CAN ID {can_id})" if name else f"CAN ID {can_id}"
 
