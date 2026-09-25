@@ -16,9 +16,9 @@
 #                  (1-254, unique on the bus). Confirmed on the hardware, 2026-09-24
 #   direction      1 or -1: flips the motor so that a positive command moves the
 #                  joint in its positive URDF direction (wheels: robot forward;
-#                  yaw: turn left; pitch: tilt down). The wheel values are checked on
-#                  the robot; the gizmo values are still assumptions: check each one
-#                  with cubemars_tool jog
+#                  yaw: turn left; pitch: tilt down). All four checked on the robot,
+#                  2026-09-25; re-check with cubemars_tool jog after replacing or
+#                  reconfiguring a motor
 #   zero_on_start  gizmo joints only. The motors cannot remember their position over
 #                  a power cycle, so the pose the gizmo is in when the robot software
 #                  starts becomes the joint zero (docs/checklist.md)
@@ -31,9 +31,9 @@ motors:
     direction: -1  # checked with cubemars_tool jog and by driving forward, 2026-09-25
   gizmo_yaw_joint:
     can_id: 10
-    direction: 1
+    direction: 1  # checked with cubemars_tool jog, 2026-09-25
     zero_on_start: true
   gizmo_pitch_joint:
     can_id: 11
-    direction: 1
+    direction: 1  # checked with cubemars_tool jog, 2026-09-25
     zero_on_start: true
