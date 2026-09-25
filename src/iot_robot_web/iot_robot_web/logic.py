@@ -89,7 +89,7 @@ def braking_distance(linear, reaction_time, deceleration):
     """
     if linear <= 0.0:
         return 0.0
-    distance = linear * max(reaction_time, 0.0), 0.30
+    distance = linear * max(reaction_time, 0.0)
     if deceleration > 0.0:
         distance += linear * linear / (2.0 * deceleration)
     distance = min(distance, 0.2)
