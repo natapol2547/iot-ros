@@ -24,10 +24,10 @@
 motors:
   wheel_joint_left:
     can_id: 12
-    direction: 1
+    direction: -1  # checked with cubemars_tool jog, 2026-09-25
   wheel_joint_right:
     can_id: 13
-    direction: -1
+    direction: -1  # checked with cubemars_tool jog, 2026-09-25
   gizmo_yaw_joint:
     can_id: 10
     direction: 1
