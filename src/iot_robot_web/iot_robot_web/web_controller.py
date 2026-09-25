@@ -87,7 +87,8 @@ class RobotBridge(Node):
         # this machine's hostname (with and without .local). ["*"] accepts any name
         self.allowed_hosts = self.declare_parameter(
             "allowed_hosts", Parameter.Type.STRING_ARRAY).value or []
-        self.telemetry_rate = self.declare_parameter("telemetry_rate", 10.0).value
+        self.telemetry_rate = self.declare_parameter(
+            "telemetry_rate", 10.0).value
         self.stream_fps = self.declare_parameter("stream_fps", 10.0).value
         self.stream_width = self.declare_parameter("stream_width", 640).value
         self.jpeg_quality = self.declare_parameter("jpeg_quality", 70).value
@@ -95,26 +96,35 @@ class RobotBridge(Node):
         self.max_linear = self.declare_parameter("max_linear", 0.4).value
         self.max_angular = self.declare_parameter("max_angular", 1.5).value
         # Highest speed slider value with turbo on (3.0 = 300 %). 1.0 hides turbo
-        self.turbo_speed = max(self.declare_parameter("turbo_speed", 3.0).value, 1.0)
+        self.turbo_speed = max(self.declare_parameter(
+            "turbo_speed", 3.0).value, 1.0)
         # The browser streams commands while a control is held; if they stop arriving
         # for this long (dropped Wi-Fi, closed laptop) the robot stops
-        self.command_timeout = self.declare_parameter("command_timeout", 0.3).value
+        self.command_timeout = self.declare_parameter(
+            "command_timeout", 0.3).value
         # A driver keeps the controls until they have been idle this long
-        self.driver_timeout = self.declare_parameter("driver_timeout", 2.0).value
+        self.driver_timeout = self.declare_parameter(
+            "driver_timeout", 2.0).value
         publish_rate = self.declare_parameter("publish_rate", 20.0).value
-        self.start_estopped = self.declare_parameter("start_estopped", False).value
+        self.start_estopped = self.declare_parameter(
+            "start_estopped", False).value
         # Ultrasonic sensors. 0 disables the guard
         self.stop_distance = self.declare_parameter(
             "obstacle_stop_distance", 0.25).value
         # Forward motion is refused earlier the faster it is: the stop distance grows by
         # the braking distance at the commanded speed (logic.braking_distance)
-        self.reaction_time = self.declare_parameter("obstacle_reaction_time", 0.2).value
-        self.deceleration = self.declare_parameter("obstacle_deceleration", 2.0).value
+        self.reaction_time = self.declare_parameter(
+            "obstacle_reaction_time", 0.2).value
+        self.deceleration = self.declare_parameter(
+            "obstacle_deceleration", 2.0).value
         self.warn_distance = self.declare_parameter("warn_distance", 1.0).value
-        self.danger_distance = self.declare_parameter("danger_distance", 0.4).value
-        self.sensor_timeout = self.declare_parameter("sensor_timeout", 1.0).value
+        self.danger_distance = self.declare_parameter(
+            "danger_distance", 0.4).value
+        self.sensor_timeout = self.declare_parameter(
+            "sensor_timeout", 1.0).value
         # Block forward motion while a sensor is faulty or silent, not just near obstacles
-        self.require_ultrasonic = self.declare_parameter("require_ultrasonic", True).value
+        self.require_ultrasonic = self.declare_parameter(
+            "require_ultrasonic", True).value
         # Gizmo limits, the joint limits of the URDF
         self.yaw_limit = self.declare_parameter("yaw_limit", 0.785398).value
         self.pitch_min = self.declare_parameter("pitch_min", -0.785398).value
@@ -141,9 +151,12 @@ class RobotBridge(Node):
 
         self.lock = threading.Lock()
         self.driver_lock = DriverLock(self.driver_timeout)
-        self.command = None  # (linear, angular, monotonic time) from the driver
-        self.published = None  # (linear, angular) last sent while driving, None when idle
-        self.guard = None  # (side, distance) while the guard holds back a forward command
+        # (linear, angular, monotonic time) from the driver
+        self.command = None
+        # (linear, angular) last sent while driving, None when idle
+        self.published = None
+        # (side, distance) while the guard holds back a forward command
+        self.guard = None
         # twist_mux obeys the latest /e_stop message from anyone. The node mirrors that
         # state, so it never contradicts an E-stop engaged from a terminal or another node
         self.estop = self.start_estopped
@@ -178,18 +191,23 @@ class RobotBridge(Node):
             Odometry, "/diff_drive_controller/odom", self.on_odom, qos_profile_sensor_data)
         self.create_subscription(
             BatteryState, "/battery_state", self.on_battery, qos_profile_sensor_data)
-        self.create_subscription(String, "/person/status", self.on_person_status, 10)
+        self.create_subscription(
+            String, "/person/status", self.on_person_status, 10)
         self.create_subscription(Bool, "/e_stop", self.on_estop, 10)
-        self.enroll_client = self.create_client(Trigger, "/person_detector/enroll")
-        self.forget_client = self.create_client(Trigger, "/person_detector/forget")
+        self.enroll_client = self.create_client(
+            Trigger, "/person_detector/enroll")
+        self.forget_client = self.create_client(
+            Trigger, "/person_detector/forget")
 
         # Steady-clock timers keep the dead-man and the e-stop heartbeat on wall time even
         # when the node runs on sim time
         steady = Clock(clock_type=ClockType.STEADY_TIME)
-        self.create_timer(1.0 / publish_rate, self.on_drive_timer, clock=steady)
+        self.create_timer(1.0 / publish_rate,
+                          self.on_drive_timer, clock=steady)
         self.create_timer(ESTOP_HEARTBEAT, self.on_estop_timer, clock=steady)
         self.create_timer(0.5, self.on_graph_timer, clock=steady)
-        self.image_guard = self.create_guard_condition(self.update_image_subscription)
+        self.image_guard = self.create_guard_condition(
+            self.update_image_subscription)
 
         if self.start_estopped:
             # Stopping early is always safe; the heartbeat repeats it
@@ -239,7 +257,8 @@ class RobotBridge(Node):
                 return
             self.apply_estop(engaged)
         state = "ENGAGED" if engaged else "released"
-        self.get_logger().warning(f"E-stop {state} by another /e_stop publisher")
+        self.get_logger().warning(
+            f"E-stop {state} by another /e_stop publisher")
 
     def on_image(self, msg):
         with self.lock:
@@ -280,6 +299,7 @@ class RobotBridge(Node):
             if stop_distance > 0.0:
                 stop_distance += braking_distance(
                     linear, self.reaction_time, self.deceleration)
+            stop_distance = min(stop_distance, 0.3)
             guarded, blocking = guard_command(
                 linear, self.fresh_ranges(now), stop_distance, self.require_ultrasonic)
             self.guard = blocking if guarded != linear else None
@@ -497,7 +517,8 @@ class FrameHub:
         self.quality = bridge.jpeg_quality
         self.cv_bridge = CvBridge()
         # One worker: frames are encoded in order and never pile up
-        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="jpeg")
+        self.pool = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="jpeg")
         self.viewers = 0
         self.jpeg = None
         self.seq = 0
@@ -544,14 +565,16 @@ class FrameHub:
             frame = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         except Exception as error:  # noqa: BLE001 - any bad frame just gets skipped
             if not self.warned:
-                self.bridge.get_logger().warning(f"Cannot convert the video frame: {error}")
+                self.bridge.get_logger().warning(
+                    f"Cannot convert the video frame: {error}")
                 self.warned = True
             return None
         height, width = frame.shape[:2]
         if width > self.width:
             frame = cv2.resize(frame, (self.width, round(height * self.width / width)),
                                interpolation=cv2.INTER_AREA)
-        ok, jpeg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
+        ok, jpeg = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
         return jpeg.tobytes() if ok else None
 
     async def next_frame(self, seen, timeout):
@@ -626,7 +649,8 @@ class WebServer:
         return digest.hexdigest()[:12]
 
     async def start(self):
-        self.runner = web.AppRunner(self.app, access_log=None, shutdown_timeout=1.0)
+        self.runner = web.AppRunner(
+            self.app, access_log=None, shutdown_timeout=1.0)
         await self.runner.setup()
         site = web.TCPSite(self.runner, self.bridge.host, self.bridge.port)
         await site.start()
@@ -770,9 +794,11 @@ class WebServer:
             engaged = data.get("engaged") is True
             if self.bridge.set_estop(engaged):
                 state = "ENGAGED" if engaged else "released"
-                self.logger.warning(f"E-stop {state} by client {client} ({remote})")
+                self.logger.warning(
+                    f"E-stop {state} by client {client} ({remote})")
         elif kind == "gizmo":
-            refused = self.bridge.aim_gizmo(client, data.get("yaw"), data.get("pitch"))
+            refused = self.bridge.aim_gizmo(
+                client, data.get("yaw"), data.get("pitch"))
             if refused:
                 await self.notice(ws, refused)
         elif kind == "mode":
@@ -881,7 +907,8 @@ class WebServer:
         self.follow = None
 
     async def person_action(self, ws, client, action):
-        services = {"enroll": self.bridge.enroll_client, "forget": self.bridge.forget_client}
+        services = {"enroll": self.bridge.enroll_client,
+                    "forget": self.bridge.forget_client}
         if action not in services:
             return
         result = {"type": "result", "action": action, "success": False}
@@ -921,7 +948,8 @@ def asyncio_future(ros_future):
         else:
             future.set_result(done.result())
 
-    ros_future.add_done_callback(lambda done: loop.call_soon_threadsafe(transfer, done))
+    ros_future.add_done_callback(
+        lambda done: loop.call_soon_threadsafe(transfer, done))
     return future
 
 
