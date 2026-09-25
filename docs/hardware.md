@@ -298,6 +298,15 @@ test in [todo.md](todo.md#stops) decides whether the robot may be driven.
 Record the firmware version shown by the program: if the motors ever disagree with
 the driver, it is the first thing to compare.
 
+A motor whose speed does not follow its command is miscalibrated, not misconfigured in
+`motors.yaml`. The typical sign is a drive that turns the wrong way and speeds up to near
+full speed whatever speed it is given; `cubemars_tool jog` and `identify` stop and release
+it with `Its speed loop does not follow the command`. Compare its settings with a good
+motor (export both `.AppParams` files and diff them), then run the Upper Computer's
+encoder calibration on that motor, with the output shaft free to turn. Check it again
+with `jog` before setting its `direction`, and do not start the robot while any motor
+fails this check: the robot's driver has no such guard.
+
 ### motors.yaml
 
 `src/iot_robot_bringup/config/motors.yaml` is the only place the CAN IDs and directions
@@ -580,6 +589,7 @@ motor, a stall and a failed zero; `--help` lists them all.
 | Launch exits: `No status frames from ...` and no other IDs heard | Motors unpowered (E-stop pressed, SW1 off), status feedback disabled, wiring, termination | Release S1; `pixi run -e robot can-check`; [R-Link settings](#r-link-settings). The service retries by itself every 5 s |
 | `can0` is `ERROR-PASSIVE` or `BUS-OFF` | Nothing acknowledges frames: motors off, CANH/CANL swapped, wrong bitrate, termination | Check wiring and the 60 ohm reading, then `pixi run -e robot can-up` |
 | `can0` is `DOWN` after boot; `networkctl status can0` shows `off (failed)` and the journal `Device doesn't support restart from Bus Off` | An older `80-iot-robot-can0.network` with `RestartSec=`, which gs_usb rejects | Rerun `sudo deploy/install.sh`; it installs the current file and restarts systemd-networkd |
+| `jog` or `identify`: `Its speed loop does not follow the command` (a wheel spins fast the wrong way) | The drive's encoder or phase calibration does not match the motor | [R-Link settings](#r-link-settings): recalibrate that motor, then jog it again |
 | `No CAN message received from CAN ID` warnings every cycle, or `can-check` warns `sends status at N Hz` | Status upload slower than 50 Hz | Raise it to 100 to 200 Hz in the Upper Computer |
 | Launch exits: `Motor fault: ...` | The motor reports a fault (voltage, temperature, stall) | Fix the cause, power-cycle the motor |
 | `Cannot activate GizmoSystem: no status frames from the motor on ...` or `... reports fault ...` | A motor went silent or faulted between the pre-flight check and the start | As for the two rows above. The service retries after 5 s and zeroes the gizmo again: put it at its zero pose |
