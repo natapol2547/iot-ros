@@ -9,7 +9,7 @@ session in [docs/checklist.md](../docs/checklist.md).
 | File | Installed as | Purpose |
 | --- | --- | --- |
 | `udev/99-iot-robot-stm32.rules` | `/etc/udev/rules.d/` | `/dev/stm32` symlink for the Nucleo's ST-LINK serial port (USB ID `0483:374b`) |
-| `network/80-iot-robot-can0.network` | `/etc/systemd/network/` | `can0` up at 1 Mbit/s with bus-off auto-restart, whenever the adapter appears |
+| `network/80-iot-robot-can0.network` | `/etc/systemd/network/` | `can0` up at 1 Mbit/s whenever the adapter appears (no bus-off auto-restart: gs_usb does not support it; recover with `can_up.sh`) |
 | `systemd/iot-robot.service` | `/etc/systemd/system/` | Runs `pixi run -e robot robot` at boot and restarts it if it exits |
 | `systemd/iot-robot.env` | `/etc/default/iot-robot` | `ROS_DOMAIN_ID`, extra launch arguments, and the CAN interface the service stops the motors on |
 | `scripts/can_up.sh` | (run from the checkout) | Manual CAN bring-up, including slcan adapters |

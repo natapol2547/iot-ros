@@ -100,7 +100,13 @@ else
   fi
   # Bitrate can only be changed while the link is down
   ip link set dev "$interface" down
-  ip link set dev "$interface" type can bitrate "$bitrate" restart-ms 100
+  # Automatic bus-off recovery where the driver supports it. gs_usb (candleLight)
+  # rejects restart-ms ("Operation not supported"); after a bus-off such a link
+  # needs this script again.
+  if ! ip link set dev "$interface" type can bitrate "$bitrate" restart-ms 100 2> /dev/null; then
+    echo "$interface: driver does not support automatic bus-off restart; setting the bitrate only." >&2
+    ip link set dev "$interface" type can bitrate "$bitrate"
+  fi
   ip link set dev "$interface" up
 fi
 

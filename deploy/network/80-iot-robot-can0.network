@@ -20,6 +20,8 @@ RequiredForOnline=no
 
 [CAN]
 BitRate=1M
-# Recover automatically from bus-off (e.g. a motor powered on mid-frame) instead of
-# staying down until someone runs `ip link set can0 down/up`.
-RestartSec=100ms
+# No RestartSec= (automatic bus-off restart): the gs_usb driver rejects it with
+# "Device doesn't support restart from Bus Off", and networkd then leaves can0 down
+# for good. After a bus-off (e.g. a motor powered on mid-frame) run
+# `sudo deploy/scripts/can_up.sh`, which enables the restart where the driver
+# supports it.
