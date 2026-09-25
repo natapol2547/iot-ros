@@ -83,10 +83,12 @@ platforms = ["linux-64"]
 [feature.sim.activation.env]
 # cubemars_hardware needs linux/can.h from kernel >= 5.11 (can_frame.len);
 # this environment's sysroot ships 4.18 headers, and mock:=true does not
-# need the plugin (nor cubemars_hardware_safe, which builds on it).
+# need the plugin (nor cubemars_hardware_safe, which builds on it). The
+# patched camera_ros (src/external/camera_ros) is robot-only; the laptop uses
+# usb_cam.
 # --packages-ignore rather than --packages-skip: colcon refuses to build a
 # package whose skipped dependency was never installed.
-IOT_COLCON_IGNORE = "--packages-ignore cubemars_hardware cubemars_hardware_safe"
+IOT_COLCON_IGNORE = "--packages-ignore cubemars_hardware cubemars_hardware_safe camera_ros"
 IOT_USE_SIM_TIME = "true"
 
 [feature.sim.tasks]
@@ -143,7 +145,9 @@ ros-jazzy-ros2controlcli = "*"
 # LSM9DS1 IMU on the Pi's I2C bus, and the orientation filter behind it
 smbus2 = "*"
 ros-jazzy-imu-filter-madgwick = "*"
-# Raspberry Pi Camera v2.1 through libcamera
+# Raspberry Pi Camera v2.1 through libcamera. The workspace builds a patched
+# camera_ros (src/external/camera_ros) that overlays this one; the package
+# stays for its dependencies (camera_info_manager, cv_bridge, components).
 ros-jazzy-camera-ros = "*"
 ros-jazzy-cv-bridge = "*"
 ros-jazzy-tf2-geometry-msgs = "*"

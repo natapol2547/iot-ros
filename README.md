@@ -152,7 +152,8 @@ src/
 ├── iot_robot_bringup       robot.launch.py, imu.launch.py, real-robot URDF wrapper, motors.yaml, controllers, camera config (ament_cmake)
 └── external
     ├── cubemars_hardware       upstream CubeMars ros2_control plugin (git submodule)
-    └── cubemars_hardware_safe  subclass that stops the motors on faults, silence and shutdown, and zeroes the gizmo
+    ├── cubemars_hardware_safe  subclass that stops the motors on faults, silence and shutdown, and zeroes the gizmo
+    └── camera_ros              camera_ros 0.7.0 patched to start with an isolated libcamera IPA (robot env only)
 ```
 
 `iot_robot_mujoco/urdf/iot_robot_sim.urdf.xacro` includes the description and adds the MuJoCo

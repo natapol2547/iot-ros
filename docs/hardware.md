@@ -143,7 +143,13 @@ The camera uses the Raspberry Pi fork of libcamera from conda-forge, pinned in
 `pixi.toml`. It is independent of the host's libcamera, which `rpicam-hello` uses (0.7
 on Raspberry Pi OS Trixie). The conda build needs `LIBCAMERA_IPA_PROXY_PATH` and
 `LIBCAMERA_IPA_CONFIG_PATH`, which `scripts/activate.sh` sets for every `pixi run`; the
-comment there explains why. To test the camera through pixi's libcamera, with the robot
+comment there explains why. Because the conda build's IPA module signatures do not
+verify, libcamera runs the IPA in a separate process, which the upstream
+`ros-jazzy-camera-ros` 0.7.0 cannot start (it aborts in `Camera::start()` with
+`A list of V4L2 controls requires a ControlInfoMap`). The workspace therefore builds a
+patched copy in `src/external/camera_ros`, which overlays the pixi package; its
+`ParameterHandler.hpp` and `CMakeLists.txt` mark the two changes with `iot-ros:`
+comments. To test the camera through pixi's libcamera, with the robot
 stopped: `pixi run -e robot cam -l`, then
 `pixi run -e robot cam -c1 --capture=30 -s width=640,height=480`.
 
@@ -599,6 +605,7 @@ motor, a stall and a failed zero; `--help` lists them all.
 | `STM32: warning: <side> sensor not responding` (or `echo stuck high`, `echo pulses too short`) | The firmware sees no valid echo from that sensor: 5 V, GND, TRIG or ECHO wiring, or a locked-up sensor | Check the sensor's wiring ([wiring.md](wiring.md#3-nucleo-f401re-sensor-board)); for `echo stuck high` unplug the Nucleo's USB for a few seconds. `/ultrasonic/<side>` is `NaN` until `STM32: info: <side> sensor recovered` |
 | `camera_ros` finds no camera | Ribbon reversed or loose, another program has the camera | `rpicam-hello --list-cameras` with the robot stopped |
 | `camera_node` dies with `Call timeout!`, `Failed to call init: -110` and `no cameras available`, while `rpicam-hello` works | `LIBCAMERA_IPA_PROXY_PATH` is not set, e.g. the node was started outside `pixi run` | Start it through `pixi run -e robot`, which sources `scripts/activate.sh` |
+| `camera_node` logs `FATAL Serializer ... A list of V4L2 controls requires a ControlInfoMap`, then `Failed to call start: -110`, and publishes no images | The unpatched `camera_ros` from pixi is running: the workspace was not built, or `install/` is not sourced | `pixi run -e robot build`; `ros2 pkg prefix camera_ros` must print `<repo>/install/camera_ros` |
 | The laptop sees no topics from the Pi | Different `ROS_DOMAIN_ID`, or the Wi-Fi blocks multicast between clients | Match the domain; try a phone hotspot or wired link to rule out the network |
 | `pixi` says the environment does not support `linux-aarch64` | Missing `-e robot` | Add `-e robot` to every command on the Pi |
 | `activate.sh: install/ was built with another pixi environment` | `install/` comes from the other environment | `pixi run -e robot clean && pixi run -e robot build` |
