@@ -76,7 +76,8 @@ def scale_command(linear_axis, angular_axis, speed, max_linear, max_angular,
     """
     speed = clamp(finite_or_zero(speed), 0.0, max(max_speed, 0.0))
     linear = clamp(finite_or_zero(linear_axis), -1.0, 1.0) * speed * max_linear
-    angular = clamp(finite_or_zero(angular_axis), -1.0, 1.0) * speed * max_angular
+    angular = clamp(finite_or_zero(angular_axis), -
+                    1.0, 1.0) * speed * max_angular
     return linear, angular
 
 
@@ -88,7 +89,7 @@ def braking_distance(linear, reaction_time, deceleration):
     """
     if linear <= 0.0:
         return 0.0
-    distance = linear * max(reaction_time, 0.0)
+    distance = min(linear * max(reaction_time, 0.0), 0.30)
     if deceleration > 0.0:
         distance += linear * linear / (2.0 * deceleration)
     return distance
@@ -105,7 +106,8 @@ def nearest_obstacle(distances):
     `distances` maps a side name to metres, math.inf for no echo, NaN for a faulty
     sensor, or None when the reading is stale. Returns (None, None) when no side has data.
     """
-    readings = [(d, side) for side, d in distances.items() if not is_missing(d)]
+    readings = [(d, side)
+                for side, d in distances.items() if not is_missing(d)]
     if not readings:
         return None, None
     distance, side = min(readings)
@@ -152,7 +154,8 @@ def classify_range(distance, warn_distance, danger_distance):
         level = YELLOW
     else:
         level = RED
-    fraction = clamp(distance / warn_distance, 0.0, 1.0) if warn_distance > 0.0 else 1.0
+    fraction = clamp(distance / warn_distance, 0.0,
+                     1.0) if warn_distance > 0.0 else 1.0
     period = FASTEST_BLINK + fraction * (SLOWEST_BLINK - FASTEST_BLINK)
     return level, round(period, 3)
 
