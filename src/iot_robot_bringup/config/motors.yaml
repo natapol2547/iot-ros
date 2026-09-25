@@ -24,7 +24,9 @@
 motors:
   wheel_joint_left:
     can_id: 12
-    direction: -1  # checked with cubemars_tool jog, 2026-09-25
+    # Not verified: on 2026-09-25 this drive ran away (-16.6 rad/s for +0.5 commanded)
+    # and needs recalibrating first. 1 assumes it is mounted mirrored to the right wheel
+    direction: 1
   wheel_joint_right:
     can_id: 13
     direction: -1  # checked with cubemars_tool jog, 2026-09-25

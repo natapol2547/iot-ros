@@ -113,14 +113,17 @@ class FakeServos:
     """CubeMars motors in servo mode: status at 100 Hz, speed follows the last command.
 
     Records every speed and current command addressed to its IDs as
-    (can_id, mode, value) with value in ERPM or mA.
+    (can_id, mode, value) with value in ERPM or mA. speed_scale multiplies the reported
+    speed; a large negative value imitates a drive with a mismatched encoder, which runs
+    away the wrong way.
     """
 
-    def __init__(self, interface, ids, current=0.0, error=0):
+    def __init__(self, interface, ids, current=0.0, error=0, speed_scale=1.0):
         self.bus = CanBus(interface)
         self.ids = list(ids)
         self.current = dict.fromkeys(self.ids, current)
         self.error = error
+        self.speed_scale = speed_scale
         self.speed = dict.fromkeys(self.ids, 0)
         self.commands = []
         self.stopping = threading.Event()
@@ -142,7 +145,7 @@ class FakeServos:
             if time.monotonic() >= next_status:
                 for can_id in self.ids:
                     self.bus.send((STATUS << 8) | can_id, struct.pack(
-                        ">hhhbB", 0, int(self.speed[can_id] / 10),
+                        ">hhhbB", 0, int(self.speed[can_id] * self.speed_scale / 10),
                         int(self.current[can_id] * 100), 30, self.error))
                 next_status += 0.01
 
@@ -321,6 +324,15 @@ class TestIdentify:
         assert "Stopped CAN ID 10 early: it drew +5.00 A, more than --max-current" in out
         assert fake.released(10)
 
+    def test_runaway_motor_is_released_without_braking(self, motors_file, servos, capsys):
+        fake = servos([10], speed_scale=-30.0)
+        assert tool(motors_file, *IDENTIFY_FAST, "--ids", "10", ask=answers("s")) == 0
+        assert "Stopped CAN ID 10 early: it turned at" in capsys.readouterr().out
+        assert fake.released(10)
+        # A zero-speed command would drive a runaway motor on; the last speed command
+        # is the move itself
+        assert fake.speeds(10)[-1] != 0
+
     def test_refuses_while_another_program_commands_the_motors(self, motors_file, servos,
                                                                capsys):
         servos([10, 11])
@@ -354,3 +366,24 @@ def test_jog_limits_gizmo_travel(motors_file, servos, capsys):
     assert 1 <= len(moving) <= 8
     assert moving[0] == pytest.approx(1336.9, abs=1)
     assert fake.speeds(10)[-1] == 0
+
+
+@needs_vcan
+def test_jog_stops_a_runaway_motor(motors_file, servos, capsys):
+    # The left wheel on the robot, 2026-09-25: +0.5 rad/s commanded, -16.6 rad/s measured
+    fake = servos([12], speed_scale=-33.0)
+    started = time.monotonic()
+    assert tool(motors_file, "jog", "--joint", "wheel_joint_left", "--velocity", "0.5",
+                "--duration", "2") == 1
+    assert time.monotonic() - started < 1.0
+    err = capsys.readouterr().err
+    assert "stopped CAN ID 12 early" in err and "Upper Computer" in err
+    assert fake.released(12)
+    assert fake.speeds(12)[-1] != 0
+
+
+@needs_vcan
+def test_jog_accepts_a_motor_that_follows(motors_file, servos, capsys):
+    servos([13], speed_scale=0.9)
+    assert tool(motors_file, "jog", "--joint", "wheel_joint_right", "--velocity", "0.5",
+                "--duration", "0.3") == 0

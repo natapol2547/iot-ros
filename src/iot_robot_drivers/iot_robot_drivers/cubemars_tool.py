@@ -22,8 +22,8 @@ import time
 from iot_robot_drivers import motor_config
 from iot_robot_drivers.cubemars import (
     ARPHRD_CAN, GEAR_RATIO, IFF_UP, POLE_PAIRS, SIOCGIFFLAGS, CanBus, CanCheckError,
-    check_interface, decode_status, describe, encode_speed, erpm_per_rad_s, fault_help,
-    interface_ioctl, interface_type, listen, missing_motor_help, stop_motors)
+    check_interface, decode_status, describe, encode_release, encode_speed, erpm_per_rad_s,
+    fault_help, interface_ioctl, interface_type, listen, missing_motor_help, stop_motors)
 from iot_robot_drivers.motor_config import GIZMO_JOINTS, MotorConfigError
 
 SEND_RATE = 50.0  # Hz, the same rate the controller manager commands the motors
@@ -40,8 +40,42 @@ POSITIVE_MOTION = {
 }
 
 
-class WiggleStopped(Exception):
-    """A motor drew too much current or reported a fault during identify."""
+# A motor whose measured output speed differs from the command by more than this
+# (rad/s), or by more than the command itself, is not following its speed loop. A drive
+# whose encoder or phase calibration does not match the motor does exactly that: it
+# turns the wrong way and accelerates to near full speed whatever it is told.
+RUNAWAY_MARGIN = 1.0
+
+
+class MotorStopped(Exception):
+    """A motor reported a fault, drew too much current or ran away during a move.
+
+    release_only: brake no further, only release. A runaway motor's speed loop pushes
+    the wrong way, so a zero-speed command would drive it on instead of stopping it.
+    """
+
+    def __init__(self, message, release_only=False):
+        super().__init__(message)
+        self.release_only = release_only
+
+
+def check_following(status, commanded, args):
+    """Raise MotorStopped if the motor's speed does not follow commanded (rad/s)."""
+    measured = status.output_velocity(args.pole_pairs, args.gear_ratio)
+    if abs(measured - commanded) > max(RUNAWAY_MARGIN, abs(commanded)):
+        raise MotorStopped(
+            f"it turned at {measured:+.2f} rad/s while {commanded:+.2f} rad/s was "
+            "commanded. Its speed loop does not follow the command, which points at the "
+            "drive's encoder or phase calibration; recalibrate the motor with the CubeMars "
+            "Upper Computer before using it (docs/hardware.md)", release_only=True)
+
+
+def end_move(bus, can_id, release_only):
+    """Brake and release the motor after a move, or only release a runaway one."""
+    if release_only:
+        bus.send(*encode_release(can_id))
+    else:
+        stop_motors(bus, [can_id])
 
 
 def load_motors(args, required=True):
@@ -197,39 +231,45 @@ def wiggle(bus, can_id, args):
 
     Each leg follows a triangular speed profile (up to --speed and back to zero), so
     there is no speed step, and the move ends where it started. It stops early on a
-    motor fault or when the current exceeds --max-current, for example because the
-    joint is pressed against a hard stop.
+    motor fault, when the current exceeds --max-current, for example because the
+    joint is pressed against a hard stop, or when the speed does not follow the
+    command (a runaway motor).
     """
     erpm_per = erpm_per_rad_s(args.pole_pairs, args.gear_ratio)
     # A triangle of height --speed covers speed * leg / 2
     leg = 2.0 * math.radians(args.degrees) / args.speed
+    commanded = [0.0]  # rad/s, the latest command sent
 
     def profile(sign):
         def command(t):
-            fraction = 1.0 - abs(2.0 * t / leg - 1.0)
-            return encode_speed(can_id, sign * max(0.0, fraction) * args.speed * erpm_per)
+            commanded[0] = sign * max(0.0, 1.0 - abs(2.0 * t / leg - 1.0)) * args.speed
+            return encode_speed(can_id, commanded[0] * erpm_per)
         return command
 
     def supervise(status):
         if status.error:
-            raise WiggleStopped(f"it reports a fault: {status.error_text}")
+            raise MotorStopped(f"it reports a fault: {status.error_text}")
         if abs(status.current_a) > args.max_current:
-            raise WiggleStopped(
+            raise MotorStopped(
                 f"it drew {status.current_a:+.2f} A, more than --max-current "
                 f"{args.max_current:g} A. Is the joint against a hard stop? Move it "
                 "away from the stop by hand and repeat")
+        check_following(status, commanded[0], args)
 
+    release_only = False
     try:
         for index in range(args.repeat):
             if index:
                 # A pause between the moves makes each one easier to see
+                commanded[0] = 0.0
                 send_for(bus, encode_speed(can_id, 0), 0.3, can_id, supervise)
             for sign in (1.0, -1.0):
                 send_for(bus, profile(sign), leg, can_id, supervise)
-    except WiggleStopped as err:
+    except MotorStopped as err:
+        release_only = err.release_only
         print(f"Stopped CAN ID {can_id} early: {err}.", flush=True)
     finally:
-        stop_motors(bus, [can_id])
+        end_move(bus, can_id, release_only)
 
 
 def ask_joint(ask, can_id, joints, assigned):
@@ -368,18 +408,26 @@ def cmd_jog(args):
         if time.monotonic() - last_print[0] >= 0.25:
             print(f"CAN ID {status.can_id}: {format_values(status, args)}", flush=True)
             last_print[0] = time.monotonic()
+        # The gizmo travel limit above is speed x time, so it only holds while the
+        # motor turns at the commanded speed
+        check_following(status, args.velocity, args)
 
     print(f"Jogging {describe(can_id, config.names() if config else None)} at "
           f"{args.velocity:+.2f} rad/s ({erpm:+.0f} ERPM) for {duration:.2g} s. "
           "Ctrl-C stops early.")
+    release_only = False
     with CanBus(args.interface, status_only=True) as bus:
         try:
             send_for(bus, command, duration, can_id, show)
         except KeyboardInterrupt:
             print("Stopping")
+        except MotorStopped as err:
+            release_only = err.release_only
+            print(f"FAIL: stopped CAN ID {can_id} early: {err}.", file=sys.stderr)
+            return 1
         finally:
             # Brake to zero speed, then release so the joint turns freely
-            stop_motors(bus, [can_id])
+            end_move(bus, can_id, release_only)
     motion = POSITIVE_MOTION.get(joint, "move the joint in its positive direction")
     print(f"A positive velocity should {motion}. If it does, set direction: 1 for "
           "this joint in motors.yaml, otherwise -1.")
