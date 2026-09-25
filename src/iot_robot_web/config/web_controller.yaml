@@ -17,6 +17,10 @@ web_controller:
     # Driving. Every browser command is scaled into these limits
     max_linear: 0.4              # m/s
     max_angular: 1.5             # rad/s
+    # Turbo button on the page: the speed slider then reaches this multiple of the limits
+    # above (3.0 = 300 %, 1.2 m/s and 4.5 rad/s). diff_drive_controller's own limits in
+    # controllers.yaml must allow that much. 1.0 hides the button
+    turbo_speed: 3.0
     publish_rate: 20.0           # Hz on /cmd_vel/web while someone drives
     command_timeout: 0.3         # s without a browser command before the robot stops
     driver_timeout: 2.0          # s a driver keeps the controls after letting go
@@ -25,6 +29,11 @@ web_controller:
 
     # Ultrasonic sensors (/ultrasonic/left, /ultrasonic/right)
     obstacle_stop_distance: 0.25 # m, forward motion is blocked below this. 0.0 disables
+    # The stop distance grows with the commanded speed by the distance needed to stop:
+    # speed * reaction_time + speed^2 / (2 * deceleration). 0.37 m at 0.4 m/s, 0.85 m
+    # at turbo's 1.2 m/s. Keep deceleration at or below the controller's max_deceleration
+    obstacle_reaction_time: 0.2  # s, sensor and command latency
+    obstacle_deceleration: 2.0   # m/s^2
     warn_distance: 1.0           # m, the light turns yellow below this
     danger_distance: 0.4         # m, the light turns red below this
     sensor_timeout: 1.0          # s before a reading counts as stale ("no data")

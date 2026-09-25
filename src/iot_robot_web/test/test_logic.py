@@ -4,7 +4,7 @@ import pytest
 
 from iot_robot_web.logic import (
     FASTEST_BLINK, GREEN, NO_DATA, RED, SLOWEST_BLINK, YELLOW, DriverLock, EchoFilter,
-    classify_range, guard_command, host_allowed, scale_command)
+    braking_distance, classify_range, guard_command, host_allowed, scale_command)
 
 
 class TestDriverLock:
@@ -55,6 +55,31 @@ class TestScaleCommand:
     def test_malformed_input_counts_as_zero(self, bad):
         assert scale_command(bad, bad, 1.0, 0.4, 1.5) == (0.0, 0.0)
         assert scale_command(1.0, 0.0, bad, 0.4, 1.5) == (0.0, 0.0)
+        assert scale_command(1.0, 0.0, bad, 0.4, 1.5, 3.0) == (0.0, 0.0)
+
+    def test_turbo_raises_the_speed_cap(self):
+        assert scale_command(1.0, -1.0, 3.0, 0.4, 1.5, 3.0) == pytest.approx((1.2, -4.5))
+        assert scale_command(1.0, 1.0, 2.0, 0.4, 1.5, 3.0) == pytest.approx((0.8, 3.0))
+
+    def test_turbo_speed_is_still_clamped(self):
+        assert scale_command(1.0, 1.0, 9.0, 0.4, 1.5, 3.0) == pytest.approx((1.2, 4.5))
+        assert scale_command(1.0, 1.0, 9.0, 0.4, 1.5, -1.0) == pytest.approx((0.0, 0.0))
+
+
+class TestBrakingDistance:
+    def test_reaction_plus_braking(self):
+        # 1.2 m/s: 0.24 m before braking starts, 0.36 m braking at 2 m/s^2
+        assert braking_distance(1.2, 0.2, 2.0) == pytest.approx(0.6)
+        assert braking_distance(0.4, 0.2, 2.0) == pytest.approx(0.12)
+
+    def test_reversing_or_standing_needs_no_distance(self):
+        assert braking_distance(0.0, 0.2, 2.0) == 0.0
+        assert braking_distance(-1.0, 0.2, 2.0) == 0.0
+
+    def test_zero_or_negative_settings_are_ignored(self):
+        assert braking_distance(1.0, 0.0, 0.0) == 0.0
+        assert braking_distance(1.0, -1.0, 2.0) == pytest.approx(0.25)
+        assert braking_distance(1.0, 0.5, -2.0) == pytest.approx(0.5)
 
 
 class TestObstacleGuard:

@@ -40,8 +40,8 @@ from std_srvs.srv import Trigger
 
 from iot_robot_web.follow_process import FollowProcess
 from iot_robot_web.logic import (
-    DriverLock, EchoFilter, clamp, classify_range, finite_or_zero, guard_command,
-    host_allowed, scale_command)
+    DriverLock, EchoFilter, braking_distance, clamp, classify_range, finite_or_zero,
+    guard_command, host_allowed, scale_command)
 
 SIDES = ("left", "right")
 DRIVE, BALL, PERSON = "drive", "ball", "person"
@@ -94,6 +94,8 @@ class RobotBridge(Node):
         # Driving
         self.max_linear = self.declare_parameter("max_linear", 0.4).value
         self.max_angular = self.declare_parameter("max_angular", 1.5).value
+        # Highest speed slider value with turbo on (3.0 = 300 %). 1.0 hides turbo
+        self.turbo_speed = max(self.declare_parameter("turbo_speed", 3.0).value, 1.0)
         # The browser streams commands while a control is held; if they stop arriving
         # for this long (dropped Wi-Fi, closed laptop) the robot stops
         self.command_timeout = self.declare_parameter("command_timeout", 0.3).value
@@ -104,6 +106,10 @@ class RobotBridge(Node):
         # Ultrasonic sensors. 0 disables the guard
         self.stop_distance = self.declare_parameter(
             "obstacle_stop_distance", 0.25).value
+        # Forward motion is refused earlier the faster it is: the stop distance grows by
+        # the braking distance at the commanded speed (logic.braking_distance)
+        self.reaction_time = self.declare_parameter("obstacle_reaction_time", 0.2).value
+        self.deceleration = self.declare_parameter("obstacle_deceleration", 2.0).value
         self.warn_distance = self.declare_parameter("warn_distance", 1.0).value
         self.danger_distance = self.declare_parameter("danger_distance", 0.4).value
         self.sensor_timeout = self.declare_parameter("sensor_timeout", 1.0).value
@@ -270,8 +276,12 @@ class RobotBridge(Node):
                     self.published = None
                 return
             linear, angular, _ = self.command
+            stop_distance = self.stop_distance
+            if stop_distance > 0.0:
+                stop_distance += braking_distance(
+                    linear, self.reaction_time, self.deceleration)
             guarded, blocking = guard_command(
-                linear, self.fresh_ranges(now), self.stop_distance, self.require_ultrasonic)
+                linear, self.fresh_ranges(now), stop_distance, self.require_ultrasonic)
             self.guard = blocking if guarded != linear else None
             self.publish_twist(guarded, angular)
             self.published = (guarded, angular)
@@ -347,7 +357,8 @@ class RobotBridge(Node):
             if not self.driver_lock.request(client, now):
                 return "busy"
             linear, angular = scale_command(
-                linear_axis, angular_axis, speed, self.max_linear, self.max_angular)
+                linear_axis, angular_axis, speed, self.max_linear, self.max_angular,
+                self.turbo_speed)
             self.command = (linear, angular, now)
         if previous != client:
             self.get_logger().info(f"Client {client} is driving")
@@ -432,6 +443,9 @@ class RobotBridge(Node):
                 }
             _, obstacle = guard_command(
                 1.0, distances, self.stop_distance, self.require_ultrasonic)
+            # A fast command is stopped further out (braking distance), so report
+            # what actually holds it back
+            obstacle = obstacle or self.guard
             (linear, angular), odom_time = self.odom
             odom = None
             if now - odom_time < self.sensor_timeout:
@@ -733,7 +747,8 @@ class WebServer:
             "id": client,
             "ui_version": self.ui_version,
             "command_rate": 20,
-            "limits": {"linear": bridge.max_linear, "angular": bridge.max_angular},
+            "limits": {"linear": bridge.max_linear, "angular": bridge.max_angular,
+                       "turbo": bridge.turbo_speed},
             "ultrasonic": {"warn": bridge.warn_distance, "danger": bridge.danger_distance,
                            "stop": bridge.stop_distance},
             "gizmo": {"yaw": bridge.yaw_limit, "pitch_min": bridge.pitch_min,

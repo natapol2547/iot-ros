@@ -28,14 +28,16 @@ diff_drive_controller:
     # odometry would stop counting. Speed has no such limit, and at 50 Hz with 100 Hz
     # status frames integrating it loses little
     position_feedback: false
-    # Conservative limits for first runs on the real robot (the simulation allows 1.0 m/s
-    # and 4.0 rad/s). The AK45-10 is rated 150 rpm, about 1.18 m/s at this wheel radius
-    linear.x.max_velocity: 0.5
-    linear.x.min_velocity: -0.5
+    # Room for the web page's turbo mode (3 x 0.4 m/s and 3 x 1.5 rad/s, the same as the
+    # simulation). The AK45-10 is rated 150 rpm, about 1.18 m/s at this wheel radius, so
+    # full turbo is at the motor's limit. The web page's obstacle guard assumes the
+    # max_deceleration below (web_controller.yaml obstacle_deceleration)
+    linear.x.max_velocity: 1.2
+    linear.x.min_velocity: -1.2
     linear.x.max_acceleration: 1.0
     linear.x.max_deceleration: -2.0
-    angular.z.max_velocity: 2.0
-    angular.z.min_velocity: -2.0
+    angular.z.max_velocity: 4.5
+    angular.z.min_velocity: -4.5
     angular.z.max_acceleration: 4.0
     angular.z.max_deceleration: -8.0
 

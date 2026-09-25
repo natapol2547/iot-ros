@@ -545,19 +545,41 @@
   window.addEventListener("blur", stopDriving);
 
   const speedRange = $("speed-range");
+  const turbo = $("turbo");
+  // Turbo lets the slider go past 100 %, up to the server's limits.turbo. It always
+  // starts off, and the speed saved for the next visit never exceeds 100 %
+  let turboOn = false;
   function updateSpeed() {
+    const limits = state.hello ? state.hello.limits : { linear: 0.4, turbo: 1 };
+    const turboMax = Math.round((limits.turbo || 1) * 100);
+    turbo.hidden = turboMax <= 100;
+    if (turbo.hidden) turboOn = false;
+    const max = turboOn ? turboMax : 100;
+    speedRange.max = max;
+    if (Number(speedRange.value) > max) speedRange.value = max;
+    turbo.setAttribute("aria-pressed", String(turboOn));
+    speedRange.parentElement.dataset.turbo = String(turboOn);
+    const min = Number(speedRange.min);
     state.speed = Number(speedRange.value) / 100;
-    speedRange.style.setProperty("--fill", `${((speedRange.value - 10) / 90) * 100}%`);
+    speedRange.style.setProperty("--fill", `${((speedRange.value - min) / (max - min)) * 100}%`);
     $("speed-pct").textContent = `${speedRange.value}%`;
-    const limit = state.hello ? state.hello.limits.linear : 0.4;
-    $("speed-max").textContent = `up to ${(limit * state.speed).toFixed(2)} m/s`;
+    $("speed-max").textContent = `up to ${(limits.linear * state.speed).toFixed(2)} m/s`;
+  }
+  function saveSpeed() {
+    localStorage.setItem("speed", Math.min(Number(speedRange.value), 100));
   }
   speedRange.addEventListener("input", () => {
     updateSpeed();
-    localStorage.setItem("speed", speedRange.value);
+    saveSpeed();
   });
   // Let go of the slider so the arrow keys drive again
   speedRange.addEventListener("change", () => speedRange.blur());
+  turbo.addEventListener("click", () => {
+    turboOn = !turboOn;
+    updateSpeed();
+    saveSpeed();
+    turbo.blur();
+  });
   const savedSpeed = Number(localStorage.getItem("speed"));
   if (savedSpeed >= 10 && savedSpeed <= 100) speedRange.value = savedSpeed;
   updateSpeed();

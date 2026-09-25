@@ -623,6 +623,26 @@ button, input { font: inherit; color: inherit; }
 .speed-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
 .speed-head b { color: var(--text); }
 .speed-max { color: var(--dim); font-size: 12px; }
+.speed-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.turbo {
+  padding: 3px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.turbo[aria-pressed="true"] {
+  border-color: var(--yellow);
+  background: rgba(244, 197, 67, 0.14);
+  color: var(--yellow);
+}
+/* Turbo recolours the slider and the percentage so the higher range is obvious */
+.speed[data-turbo="true"] { --accent: var(--yellow); }
+.speed[data-turbo="true"] .speed-head b { color: var(--yellow); }
 
 input[type="range"] {
   width: 100%;

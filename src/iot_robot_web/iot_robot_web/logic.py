@@ -66,15 +66,32 @@ class DriverLock:
         return True
 
 
-def scale_command(linear_axis, angular_axis, speed, max_linear, max_angular):
-    """Map joystick axes in [-1, 1] and a speed slider in [0, 1] to velocities.
+def scale_command(linear_axis, angular_axis, speed, max_linear, max_angular,
+                  max_speed=1.0):
+    """Map joystick axes in [-1, 1] and a speed slider in [0, max_speed] to velocities.
 
-    Out-of-range or malformed inputs are clamped, so no client can exceed the limits.
+    `max_speed` is the highest slider value accepted: 1.0 is 100 %, and turbo mode lets
+    the slider go above it. Out-of-range or malformed inputs are clamped, so no client can
+    exceed max_speed times the limits.
     """
-    speed = clamp(finite_or_zero(speed), 0.0, 1.0)
+    speed = clamp(finite_or_zero(speed), 0.0, max(max_speed, 0.0))
     linear = clamp(finite_or_zero(linear_axis), -1.0, 1.0) * speed * max_linear
     angular = clamp(finite_or_zero(angular_axis), -1.0, 1.0) * speed * max_angular
     return linear, angular
+
+
+def braking_distance(linear, reaction_time, deceleration):
+    """Distance (m) the robot covers before it stops from forward speed `linear` (m/s).
+
+    It keeps going for `reaction_time` (sensor and command latency), then brakes at
+    `deceleration` (m/s^2, positive). Reversing or standing still needs no distance.
+    """
+    if linear <= 0.0:
+        return 0.0
+    distance = linear * max(reaction_time, 0.0)
+    if deceleration > 0.0:
+        distance += linear * linear / (2.0 * deceleration)
+    return distance
 
 
 def is_missing(distance):

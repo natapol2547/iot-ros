@@ -19,10 +19,11 @@ diff_drive_controller:
     enable_odom_tf: true
     publish_rate: 50.0
     cmd_vel_timeout: 0.5
-    linear.x.max_velocity: 1.0
-    linear.x.min_velocity: -1.0
-    angular.z.max_velocity: 4.0
-    angular.z.min_velocity: -4.0
+    # Room for the web page's turbo mode: 3 x 0.4 m/s and 3 x 1.5 rad/s
+    linear.x.max_velocity: 1.2
+    linear.x.min_velocity: -1.2
+    angular.z.max_velocity: 4.5
+    angular.z.min_velocity: -4.5
 
 gizmo_controller:
   ros__parameters:

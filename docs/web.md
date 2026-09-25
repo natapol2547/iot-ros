@@ -56,6 +56,7 @@ pixi run -e robot ros2 launch iot_robot_web web.launch.py port:=8081
 | **Joystick** | Drag the knob. Up drives forward, sideways turns; the further from the centre, the faster. Letting go stops the robot. |
 | **Keyboard** | W A S D or the arrow keys, on computers only. Space is the E-stop. |
 | **Speed slider** | 10 to 100 % of the maximum speed (0.4 m/s, 1.5 rad/s). Each browser remembers its own setting. |
+| **Turbo** | Lets the speed slider go up to 300 % (1.2 m/s, 4.5 rad/s; `turbo_speed`). Turbo always starts off, turning it off drops the slider back to 100 %, and a reload never restores a turbo speed. |
 | **Mode** | Drive, Follow ball or Follow person. The status line shows starting, running or failed (with the last line the follower printed). |
 | **Camera aim** | Drive mode only. Drag the dot to pan left/right and tilt up; Centre levels the camera. |
 | **Follow person** | Raise both hands for 2 s in front of the robot to enroll, or press "Enroll person in view" to enroll the person nearest the image centre. Forget clears the enrolled person. |
@@ -80,6 +81,11 @@ the page: a red banner appears, the forward half of the joystick turns red, and 
 turning still works. A grey side blocks forward motion the same way ("No data from the left
 sensor"), because nothing is watching that side. Set `require_ultrasonic: false` to drive
 without the STM32 on the bench; the guard then uses whichever side still reports.
+
+Faster commands are refused further out, because the robot needs room to stop: the stop
+distance grows by `speed × obstacle_reaction_time + speed² / (2 × obstacle_deceleration)`.
+With the defaults, it is 0.37 m at 0.4 m/s (100 %) and 0.85 m at 1.2 m/s (full turbo). Slowing
+down, with the slider or the joystick, lets the robot creep closer again, down to 0.25 m.
 
 The **top bar** shows the connection, whether wheel odometry is arriving ("Base"), how many
 browsers are connected, and the battery voltage and charge once the STM32 reports it. The
@@ -183,11 +189,14 @@ Floats keep their decimal point, because ROS parameters are typed.
 | `jpeg_quality` | `70` | JPEG quality, 0 to 100 |
 | `max_linear` | `0.4` | m/s at full joystick and 100 % speed |
 | `max_angular` | `1.5` | rad/s at full joystick and 100 % speed |
+| `turbo_speed` | `3.0` | Highest speed slider value with Turbo on (3.0 = 300 %). `1.0` hides the button. `diff_drive_controller` clips anything above its own limits in `controllers.yaml` (1.2 m/s, 4.5 rad/s) |
 | `publish_rate` | `20.0` | Hz on `/cmd_vel/web` while someone drives |
 | `command_timeout` | `0.3` | s without a browser command before the robot stops |
 | `driver_timeout` | `2.0` | s a driver keeps the controls after letting go |
 | `start_estopped` | `false` | Engage the E-stop at every start. With `false` the node listens first and releases only a stop that nobody repeats. Set through the `start_estopped` launch argument; `robot.launch.py` passes `true` |
-| `obstacle_stop_distance` | `0.25` | m, forward motion is refused below this. `0.0` disables the guard |
+| `obstacle_stop_distance` | `0.25` | m, forward motion is refused below this, plus the braking distance at the commanded speed. `0.0` disables the guard |
+| `obstacle_reaction_time` | `0.2` | s of sensor and command latency in the braking distance |
+| `obstacle_deceleration` | `2.0` | m/s² braking in the braking distance. Keep it at or below the controller's `linear.x.max_deceleration` |
 | `warn_distance` | `1.0` | m, yellow below this |
 | `danger_distance` | `0.4` | m, red below this |
 | `sensor_timeout` | `1.0` | s before a reading counts as stale ("No data") |
