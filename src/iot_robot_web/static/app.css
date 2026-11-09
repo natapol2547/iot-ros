@@ -274,6 +274,49 @@ button, input { font: inherit; color: inherit; }
 .driver[data-driver="you"] { color: #a9cbff; border-color: rgba(91, 156, 240, 0.45); }
 .driver[data-driver="other"] { color: var(--yellow); border-color: rgba(244, 197, 67, 0.4); }
 .readout-label { color: var(--muted); }
+
+/* Video quality: a native menu laid invisibly over a chip, so phones get their own picker
+   and the chip can say what the stream actually delivers */
+.quality {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(10, 12, 14, 0.78);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.quality:hover { border-color: var(--line-2); }
+.quality:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quality[data-quality="off"] .quality-name { color: var(--muted); }
+.quality select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  /* iOS zooms into focused controls with smaller text */
+  font-size: 16px;
+}
+.quality-res, .quality-rate { color: var(--muted); font-weight: 500; }
+.quality-res:empty, .quality-rate:empty { display: none; }
+.quality-rate { display: none; }
+.caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--muted);
+}
 .readout b { min-width: 4.6ch; font-family: var(--mono); font-weight: 600; text-align: right; }
 .unit { color: var(--muted); font-size: 0.85em; }
 
@@ -889,6 +932,7 @@ kbd {
   .toast { bottom: 24px; }
 
   .wide-only { display: inline; }
+  .quality-rate:not(:empty) { display: inline; }
   .sonar { grid-template-columns: minmax(0, 1fr) 190px minmax(0, 1fr); gap: 18px; padding: 16px 22px; }
   .sonar-side { gap: 16px; }
   .sonar-read { flex: 1; max-width: 300px; }
@@ -910,6 +954,7 @@ kbd {
   .estop-title { font-size: 22px; }
   .video-bar { padding: 4px 8px; }
   .video-bar .tag { padding: 3px 9px; font-size: 12px; }
+  .quality-rate:not(:empty) { display: none; }
   .estop-veil { padding-top: 44px; }
   .sonar { grid-template-columns: minmax(0, 1fr) 90px minmax(0, 1fr); padding: 8px 12px; gap: 10px; }
   .lamp { width: 16px; height: 16px; }
@@ -932,7 +977,14 @@ kbd {
   .stage { gap: 20px; }
 }
 
+@media (max-width: 420px) {
+  .quality-res { display: none; }
+}
+
 @media (max-width: 370px) {
+  .hud { left: 8px; right: 8px; gap: 6px; }
+  .hud-bottom { bottom: 8px; }
+  .readout, .quality { gap: 5px; padding: 4px 8px; }
   .sonar { grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); gap: 6px; }
   .sonar-value b { font-size: 23px; }
   .joystick { --size: 148px; }

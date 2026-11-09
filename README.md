@@ -229,6 +229,7 @@ Other useful topics and services:
 | ReID thresholds | match 0.75, learn new looks above 0.85, hands up for 2.0 s | `iot_robot_behavior/config/person_follow.yaml` |
 | Ultrasonic lights | green ≥ 1.0 m, yellow 0.4–1.0 m, red < 0.4 m; forward blocked below 0.25 m | `iot_robot_web/config/web_controller.yaml` |
 | Web driving limits | 0.4 m/s, 1.5 rad/s; the robot stops 0.3 s after the browser goes quiet | same |
+| Web video | High 640 px 15 fps, Medium 480 px 10 fps, Low 320 px 8 fps; Auto starts at Medium | same |
 
 ## Progress
 
@@ -244,6 +245,8 @@ Other useful topics and services:
       in sim (service enrollment, two mannequins); gesture enrollment still to be tried on the webcam
 - [x] Browser controller: drive, follow modes, camera aim, E-stop and ultrasonic traffic lights,
       tested in the sim and against the mock robot
+- [x] Video quality per browser (Auto, High, Medium, Low, Off), with no lag build-up on slow
+      Wi-Fi
 - [ ] Step 8: real hardware
   - [x] Software: `robot.launch.py`, the CubeMars plugin with safe stops (tested on a virtual CAN
         bus with fake motors), the STM32 bridge (tested against a fake board), camera config,
@@ -532,6 +535,11 @@ These cost real debugging time. Check here first when something similar breaks.
 - **aiohttp 3.14's WebSocket reader can drop the first message after a ping/pong** when
   per-message compression is on, which could lose a STOP. The server disables compression;
   `iot_robot_web/test/test_websocket.py` guards the regression.
+- **MJPEG over a slow link builds up lag in the kernel, not in the app.** Linux grows a
+  socket's send buffer to megabytes, so the server's writes never block and a 0.5 Mb/s
+  viewer fell 18 s behind within half a minute. The stream now waits until earlier frames
+  are acknowledged (`SIOCOUTQ`) before sending the newest one, and skips the rest
+  ([docs/web.md](docs/web.md#video-quality)).
 - The page answers only to IP addresses, `localhost` and the machine's own host names (the
   `allowed_hosts` parameter adds more). That blocks DNS rebinding, where a hostile web page
   re-points its domain at the robot and drives it from a visitor's browser.

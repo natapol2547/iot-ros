@@ -60,6 +60,7 @@ pixi run -e robot ros2 launch iot_robot_web web.launch.py port:=8081
 | **Mode** | Drive, Follow ball or Follow person. The status line shows starting, running or failed (with the last line the follower printed). |
 | **Camera aim** | Drive mode only. Drag the dot to pan left/right and tilt up; Centre levels the camera. |
 | **Follow person** | Raise both hands for 2 s in front of the robot to enroll, or press "Enroll person in view" to enroll the person nearest the image centre. Forget clears the enrolled person. |
+| **Video quality** | The chip in the bottom right corner of the video. **Auto** (the default) adapts to this browser's connection; **High** (640 px, up to 15 fps, about 3 Mb/s), **Medium** (480 px, 10 fps, about 1.2 Mb/s) and **Low** (320 px, 8 fps, about 0.5 Mb/s) stay fixed; **Off** stops the video. The chip shows what actually arrives, e.g. "Auto 360p 10 fps, 1.2 Mb/s" (only the resolution on phones). Each browser chooses for itself and remembers it; with the browser's data saver on, a first visit starts at Low. |
 
 The **ultrasonic lights** show each sensor separately:
 
@@ -86,6 +87,25 @@ Faster commands are refused further out, because the robot needs room to stop: t
 distance grows by `speed × obstacle_reaction_time + speed² / (2 × obstacle_deceleration)`.
 With the defaults, it is 0.37 m at 0.4 m/s (100 %) and 0.85 m at 1.2 m/s (full turbo). Slowing
 down, with the slider or the joystick, lets the robot creep closer again, down to 0.25 m.
+
+### Video quality
+
+Video is the one thing on the page that needs real bandwidth, so each browser picks its own
+quality and the robot keeps the picture current rather than complete:
+
+- **The picture stays live on a slow connection.** The robot sends a browser its next frame
+  only once the earlier ones have arrived (`video_backlog`). On a weak link it skips frames
+  instead of queueing them. Measured on a 0.5 Mb/s link: before this change the picture fell
+  further behind by about 0.7 s every second, 18 s behind after 24 s, then raced through
+  the backlog when the link recovered. Now it stays about half a second behind.
+- **Auto** starts at Medium. When at least half of the recent frames had to wait for the
+  connection, it steps down a level (at most once every 2 s); after 8 s without waiting it
+  tries one level up. A step up that has to come back down within 10 s doubles the wait
+  before the next try, up to 64 s, so a connection that sits between two levels settles on
+  the lower one instead of flickering between them.
+- **Off** saves the most. When no browser watches, the robot drops its image subscription
+  altogether, and the follow modes stop drawing their annotated views.
+- A hidden tab (another tab in front, a locked phone) stops its stream the same way.
 
 The **top bar** shows the connection, whether wheel odometry is arriving ("Base"), how many
 browsers are connected, and the battery voltage and charge once the STM32 reports it. The
@@ -184,9 +204,11 @@ Floats keep their decimal point, because ROS parameters are typed.
 | `port` | `8080` | TCP port (overridden by the launch argument) |
 | `allowed_hosts` | unset | Extra host names the page may be opened under, e.g. `["robot.lan"]`. IP addresses, `localhost` and this machine's hostname (plain and `.local`) always work. `["*"]` accepts every name and turns off the DNS rebinding check |
 | `telemetry_rate` | `10.0` | Hz, state pushed to each browser |
-| `stream_fps` | `10.0` | MJPEG frame rate cap |
-| `stream_width` | `640` | Wider frames are scaled down before JPEG encoding |
-| `jpeg_quality` | `70` | JPEG quality, 0 to 100 |
+| `video.high` | `{width: 640, quality: 70, fps: 15.0}` | The High quality: frames at most `width` px wide (wider ones are scaled down), JPEG `quality` 1 to 100, at most `fps` frames a second |
+| `video.medium` | `{width: 480, quality: 60, fps: 10.0}` | The Medium quality, where Auto starts |
+| `video.low` | `{width: 320, quality: 50, fps: 8.0}` | The Low quality |
+| `video_default` | `auto` | What a browser gets until its viewer picks a quality: `auto`, `high`, `medium` or `low` |
+| `video_backlog` | `16384` | Bytes. A browser gets its next frame only once less than this much of the earlier ones is still on its way to it, so a slow connection skips frames instead of lagging. Larger is smoother over long round trips; smaller lags less |
 | `max_linear` | `0.4` | m/s at full joystick and 100 % speed |
 | `max_angular` | `1.5` | rad/s at full joystick and 100 % speed |
 | `turbo_speed` | `3.0` | Highest speed slider value with Turbo on (3.0 = 300 %). `1.0` hides the button. `diff_drive_controller` clips anything above its own limits in `controllers.yaml` (1.2 m/s, 4.5 rad/s) |
@@ -219,7 +241,7 @@ Floats keep their decimal point, because ROS parameters are typed.
  ────────                         ───────────────────────────────────────────────────────────
  page ── WebSocket /ws ─────────► aiohttp on asyncio (main thread)
       ◄─ state 10 Hz ───────────   │  driver lock, E-stop, mode switching, follow processes
- <img> ◄─ MJPEG /stream.mjpg ───   │  JPEG encoder thread, one encode per frame for all viewers
+ <img> ◄─ MJPEG /stream.mjpg ───   │  JPEG encoder thread, one encode per frame and quality
                                    ▼  thread-safe calls
                                   RobotBridge node (rclpy executor thread)
                                      publishes  /cmd_vel/web, /e_stop, /gizmo_controller/commands
@@ -237,9 +259,11 @@ Floats keep their decimal point, because ROS parameters are typed.
   service results across with `call_soon_threadsafe`. Timers use the steady clock, so the
   dead-man and E-stop keep working even if `/clock` stops in the simulator.
 - **WebSocket messages** are JSON. The page sends `drive` (joystick axes and speed fraction),
-  `release`, `estop`, `gizmo`, `mode` and `person`. The server sends `hello` (limits and
-  thresholds), `state` at 10 Hz, `notice` (refusals) and `result` (enroll and forget answers).
-  The server pings every 5 s and drops a browser that does not answer.
+  `release`, `estop`, `gizmo`, `mode`, `person` and `video` (this browser's quality). The
+  server sends `hello` (limits, thresholds and the video qualities), `state` at 10 Hz (with
+  this browser's own video quality, resolution, frame rate and bit rate), `notice`
+  (refusals) and `result` (enroll and forget answers). The server pings every 5 s and drops
+  a browser that does not answer.
 - **No WebSocket compression.** The server declines permessage-deflate. With it, aiohttp 3.14
   closed the socket with 1002 (protocol error) when a browser's first frame was the pong to a
   heartbeat ping and its next one a compressed message: a visitor who watched the page for
@@ -249,10 +273,28 @@ Floats keep their decimal point, because ROS parameters are typed.
   subscription and does not say who published a message. The node therefore remembers the
   values it published in the last second and skips them when they come back, in order, so
   only other publishers' messages change the state.
-- **Video.** `/stream.mjpg` is a `multipart/x-mixed-replace` response that browsers display in a
-  plain `<img>`. The image subscription exists only while at least one browser is watching, so
-  the follow modes' debug images are rendered only when someone looks at them. The source
-  follows the mode: the raw camera in Drive, the detector's annotated image in the follow modes.
+- **Video.** `/stream.mjpg?quality=<q>&client=<id>` is a `multipart/x-mixed-replace` response
+  that browsers display in a plain `<img>`. The image subscription exists only while at least
+  one browser is watching, so the follow modes' debug images are rendered only when someone
+  looks at them. The source follows the mode: the raw camera in Drive, the detector's
+  annotated image in the follow modes.
+  - **Viewers pull frames.** Each stream takes the newest frame when its quality's frame rate
+    allows and its connection has taken the earlier ones. A frame is converted from ROS once
+    and encoded once per quality in use, on one worker thread. Viewers of one quality share
+    each encode and stay in step, so four browsers on Medium cost the same as one.
+  - **No lag on slow links.** Before each frame the stream waits until less than
+    `video_backlog` bytes are unacknowledged: asyncio's buffer plus the kernel's unacknowledged
+    bytes (`SIOCOUTQ`), which also covers data queued in the network, such as at a busy Wi-Fi
+    access point. `TCP_NOTSENT_LOWAT` keeps the kernel from taking a large frame all at once.
+    Without these limits the kernel's send buffer grows to megabytes, and on a slow link it
+    fills with frames the viewer sees many seconds late.
+  - **Auto** learns from that wait: a frame that waited more than a quarter of its frame
+    period counts as congested (`AdaptiveQuality` in `logic.py`).
+  - `client=` ties the stream to the page's WebSocket, so a `video` message switches its
+    quality without a reconnect and `state` reports its rates. Only the browser's own
+    streams can be changed; a `client` that is not connected is ignored.
+  - The image subscription keeps only the newest frame (depth 1). A deeper queue would make
+    a busy node work through frames that are already out of date.
 - **Follow modes** are the same launch files as `pixi run follow` and
   `pixi run follow-person`, started with `ros2 launch` as a child process in its own session.
   Switching modes sends SIGINT, waits up to `stop_timeout`, then kills the whole process group,
@@ -275,14 +317,16 @@ of any image topic). It was not used here because:
   environment, replaces two extra servers that are not installed in it. The page is plain
   HTML, CSS and JavaScript with no build step and no CDN, so it works on a LAN without
   Internet access.
-- **Bandwidth.** Each frame is encoded once and shared by every viewer, and nothing is
-  subscribed while nobody watches.
+- **Bandwidth.** Each frame is encoded once per quality and shared by every viewer of that
+  quality, each browser chooses its own quality, and nothing is subscribed while nobody
+  watches.
 
 ## Development
 
 ```bash
 # Unit tests (driver lock, command scaling, obstacle guard, light levels, E-stop echo filter,
-# host check) and the WebSocket regression test
+# host check, video quality choice), the WebSocket regression test and the video stream
+# tests (about 25 s: shared encodes, quality changes, slow viewers)
 pixi run bash -c 'cd src/iot_robot_web && python -m pytest test'
 # or through colcon
 pixi run colcon test --packages-select iot_robot_web && pixi run colcon test-result --verbose
@@ -312,6 +356,8 @@ use the browser's device toolbar at the same sizes.
 | Symptom | Cause |
 | --- | --- |
 | "Waiting for video" | Nothing is publishing the mode's image topic. Check `ros2 topic hz /camera/image_raw`. |
+| "Video is off" | This browser's quality is set to Off. Pick another quality on the chip in the video's corner. |
+| Video is blurry or choppy | Auto has stepped down for a slow connection: the chip shows the resolution and frame rate that arrive. Move closer to the access point, or use 5 GHz Wi-Fi. Choosing High forces the full picture, but on a slow link it then arrives at a lower frame rate. |
 | "Connection lost" banner | The web node stopped or the network dropped. The page reconnects by itself. |
 | Mode shows "failed" | The follow launch exited. The status line shows its last output; the web node log shows the last 10 lines. |
 | Lights stay grey | No valid `/ultrasonic/*` reading within `sensor_timeout`. On the robot, one grey side while the other works usually means the STM32 reports that sensor as faulty: the bridge logs `STM32: warning: <side> ...` and publishes `NaN` (see [hardware.md](hardware.md#stm32-sensor-board)). |

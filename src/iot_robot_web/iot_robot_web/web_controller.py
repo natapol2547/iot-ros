@@ -7,7 +7,10 @@ guard condition. Every safety rule (speed limits, dead-man timeout, one driver a
 obstacle guard, e-stop) is enforced here, never in the browser.
 """
 
+import array
 import asyncio
+import collections
+import fcntl
 import hashlib
 import json
 import math
@@ -32,7 +35,8 @@ from rclpy.clock import Clock, ClockType
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data)
 from rclpy.signals import SignalHandlerOptions
 from sensor_msgs.msg import BatteryState, Image, Range
 from std_msgs.msg import Bool, Float64MultiArray, String
@@ -40,8 +44,9 @@ from std_srvs.srv import Trigger
 
 from iot_robot_web.follow_process import FollowProcess
 from iot_robot_web.logic import (
-    DriverLock, EchoFilter, braking_distance, clamp, classify_range, finite_or_zero,
-    guard_command, host_allowed, scale_command)
+    AUTO, VIDEO_QUALITIES, AdaptiveQuality, DriverLock, EchoFilter, RateMeter,
+    braking_distance, choose_quality, clamp, classify_range, finite_or_zero, guard_command,
+    host_allowed, scale_command, video_profile)
 
 SIDES = ("left", "right")
 DRIVE, BALL, PERSON = "drive", "ball", "person"
@@ -49,6 +54,13 @@ MODES = (DRIVE, BALL, PERSON)
 NOT_YOUR_TURN = "Someone else is driving. Wait until they let go."
 # An engaged E-stop is repeated this often (s) so a restarted twist_mux locks again
 ESTOP_HEARTBEAT = 1.0
+# Width (px), JPEG quality and frame rate cap of each video quality, unless configured
+VIDEO_DEFAULTS = {"high": (640, 70, 15.0), "medium": (480, 60, 10.0), "low": (320, 50, 8.0)}
+# Only the newest camera frame matters. A deeper queue makes a busy node work through
+# frames that are already out of date
+LATEST_FRAME = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE)
 
 
 def websocket_response(heartbeat=5.0):
@@ -89,9 +101,24 @@ class RobotBridge(Node):
             "allowed_hosts", Parameter.Type.STRING_ARRAY).value or []
         self.telemetry_rate = self.declare_parameter(
             "telemetry_rate", 10.0).value
-        self.stream_fps = self.declare_parameter("stream_fps", 10.0).value
-        self.stream_width = self.declare_parameter("stream_width", 640).value
-        self.jpeg_quality = self.declare_parameter("jpeg_quality", 70).value
+        # Video qualities, best first. Each caps the frame width, the JPEG quality and the
+        # frame rate. "auto" picks one per viewer from how well its connection keeps up
+        self.video_profiles = []
+        for name in VIDEO_QUALITIES:
+            width, quality, fps = VIDEO_DEFAULTS[name]
+            self.video_profiles.append(video_profile(
+                name,
+                self.declare_parameter(f"video.{name}.width", width).value,
+                self.declare_parameter(f"video.{name}.quality", quality).value,
+                self.declare_parameter(f"video.{name}.fps", fps).value))
+        # What a browser gets until its viewer picks something else
+        self.video_default = choose_quality(
+            self.declare_parameter("video_default", AUTO).value, AUTO)
+        # A viewer gets its next frame only once less than this many bytes of the earlier
+        # ones are still on their way (sent but not yet acknowledged by its browser). Frames
+        # are skipped instead of queueing up as seconds of lag on slow Wi-Fi
+        self.video_backlog = self.declare_parameter(
+            "video_backlog", 16384).value
         # Driving
         self.max_linear = self.declare_parameter("max_linear", 0.4).value
         self.max_angular = self.declare_parameter("max_angular", 1.5).value
@@ -177,6 +204,8 @@ class RobotBridge(Node):
         self.image = None
         self.image_seq = 0
         self.image_time = never
+        # Called on the ROS thread after every new frame (FrameHub wakes its viewers)
+        self.image_listener = None
 
         self.cmd_pub = self.create_publisher(TwistStamped, "/cmd_vel/web", 10)
         self.estop_pub = self.create_publisher(Bool, "/e_stop", 10)
@@ -268,6 +297,9 @@ class RobotBridge(Node):
             self.image = msg
             self.image_seq += 1
             self.image_time = time.monotonic()
+        listener = self.image_listener
+        if listener is not None:
+            listener()
 
     def update_image_subscription(self):
         with self.lock:
@@ -279,7 +311,7 @@ class RobotBridge(Node):
         # debug images when nobody subscribes, and the Pi saves the bandwidth
         if topic and self.image_sub is None:
             self.image_sub = self.create_subscription(
-                Image, topic, self.on_image, qos_profile_sensor_data)
+                Image, topic, self.on_image, LATEST_FRAME)
 
     def on_drive_timer(self):
         now = time.monotonic()
@@ -507,93 +539,300 @@ class RobotBridge(Node):
             }
 
 
+# One frame encoded for one quality. `time` is when the encode was asked for (event loop
+# clock), generation tells frames of an earlier mode apart
+Encoded = collections.namedtuple(
+    "Encoded", ["seq", "generation", "jpeg", "width", "height", "time"])
+
+# A frame counts as congested when it had to wait this share of its frame period for the
+# earlier ones to arrive
+CONGESTED_SHARE = 0.25
+# A viewer whose connection accepts nothing for this long (s) is dropped; the page reconnects
+STALLED_VIEWER = 10.0
+
+
+class Viewer:
+    """One MJPEG connection: its quality setting, the auto chooser and its sending rates."""
+
+    def __init__(self, hub, client, quality, now):
+        self.hub = hub
+        self.client = client  # the WebSocket client it belongs to, or None
+        self.quality = quality
+        self.auto = AdaptiveQuality(len(hub.profiles), hub.auto_start, now)
+        self.meter = RateMeter()
+        self.size = None  # (width, height) of the latest frame sent
+
+    @property
+    def profile(self):
+        if self.quality == AUTO:
+            return self.hub.profiles[self.auto.index]
+        return self.hub.by_name[self.quality]
+
+    def set_quality(self, quality, now):
+        if quality == self.quality:
+            return
+        if quality == AUTO:
+            # Carry on from what the viewer was watching rather than from the start level
+            index = self.hub.profiles.index(self.profile)
+            self.auto = AdaptiveQuality(len(self.hub.profiles), index, now)
+        self.quality = quality
+
+    def sent(self, encoded, congested, now):
+        self.size = (encoded.width, encoded.height)
+        self.meter.add(len(encoded.jpeg), now)
+        if self.quality == AUTO:
+            self.auto.sent(congested, now)
+
+    def stats(self, now):
+        fps, bps = self.meter.rates(now)
+        width, height = self.size or (None, None)
+        return {
+            "quality": self.quality,
+            "profile": self.profile.name,
+            "width": width,
+            "height": height,
+            "fps": round(fps, 1),
+            "kbps": round(bps / 1000.0),
+        }
+
+
 class FrameHub:
-    """Encodes the newest camera frame to JPEG once, for every MJPEG viewer."""
+    """Hands the newest camera frame to every MJPEG viewer, encoded for each one's quality.
+
+    Viewers pull frames: each takes the newest one when its own frame rate allows and its
+    connection has taken the previous one. A slow viewer therefore skips frames instead of
+    falling behind, and never holds up the others. A frame is converted from ROS once and
+    encoded once per quality in use, however many viewers watch it.
+    """
 
     def __init__(self, bridge):
         self.bridge = bridge
-        self.period = 1.0 / bridge.stream_fps
-        self.width = bridge.stream_width
-        self.quality = bridge.jpeg_quality
+        self.profiles = bridge.video_profiles  # best first
+        self.by_name = {profile.name: profile for profile in self.profiles}
+        # Auto starts in the middle and probes upwards
+        self.auto_start = len(self.profiles) // 2
         self.cv_bridge = CvBridge()
-        # One worker: frames are encoded in order and never pile up
+        # One worker: encodes never compete with each other for the CPU
         self.pool = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="jpeg")
-        self.viewers = 0
-        self.jpeg = None
-        self.seq = 0
-        self.changed = asyncio.Condition()
-        self.task = None
+        self.loop = asyncio.get_running_loop()
+        self.viewers = {}  # Viewer -> None: a set that remembers the order they came in
+        # Replaced after every frame, so waiters wake once per frame
+        self.arrived = asyncio.Event()
+        self.generation = 0  # bumped by reset(), when the mode switches topic
+        self.encoded = {}  # profile name -> Encoded, the newest one
+        self.pending = {}  # (profile name, seq, generation) -> asyncio future of an encode
+        self.decoded = None  # worker thread only: ((generation, seq), bgr, {width: resized})
+        self.encodes = 0  # frames encoded, for the tests
         self.closed = False
         self.warned = False
+        bridge.image_listener = self.image_arrived
 
-    def add_viewer(self):
-        self.viewers += 1
-        if self.viewers == 1:
+    # ROS thread
+    def image_arrived(self):
+        try:
+            self.loop.call_soon_threadsafe(self.wake)
+        except RuntimeError:
+            pass  # the event loop is closed: shutting down
+
+    def wake(self):
+        arrived, self.arrived = self.arrived, asyncio.Event()
+        arrived.set()
+
+    def add_viewer(self, viewer):
+        self.viewers[viewer] = None
+        if len(self.viewers) == 1:
             self.bridge.set_streaming(True)
-            self.task = asyncio.create_task(self.run())
 
-    def remove_viewer(self):
-        self.viewers -= 1
-        if self.viewers == 0:
+    def remove_viewer(self, viewer):
+        self.viewers.pop(viewer, None)
+        if not self.viewers:
             self.bridge.set_streaming(False)
-            self.task.cancel()
-            self.jpeg = None
+            self.encoded.clear()
+
+    def set_quality(self, client, quality):
+        """Change the quality of every stream of `client`. Returns False if not valid."""
+        if quality != AUTO and quality not in self.by_name:
+            return False
+        now = self.loop.time()
+        for viewer in self.viewers:
+            if viewer.client == client:
+                viewer.set_quality(quality, now)
+        return True
+
+    def stats(self, client):
+        """Video statistics of the newest stream of `client`, or None if it has none."""
+        viewers = [viewer for viewer in self.viewers if viewer.client == client]
+        return viewers[-1].stats(self.loop.time()) if viewers else None
 
     def reset(self):
-        """Forget the last frame, e.g. when the mode switches to another topic."""
-        self.jpeg = None
+        """Forget every frame, e.g. when the mode switches to another topic."""
+        self.generation += 1
+        self.encoded.clear()
 
-    async def run(self):
-        loop = asyncio.get_running_loop()
-        encoded = None
-        while True:
-            started = loop.time()
+    async def wait_image(self, seen, timeout):
+        """Wait up to `timeout` s for a frame other than `seen`. Returns its seq or None."""
+        deadline = self.loop.time() + timeout
+        while not self.closed:
             msg, seq = self.bridge.latest_image()
-            if msg is not None and seq != encoded:
-                encoded = seq
-                jpeg = await loop.run_in_executor(self.pool, self.encode, msg)
-                if jpeg is not None:
-                    async with self.changed:
-                        self.jpeg = jpeg
-                        self.seq += 1
-                        self.changed.notify_all()
-            await asyncio.sleep(max(0.0, self.period - (loop.time() - started)))
-
-    def encode(self, msg):
-        try:
-            frame = self.cv_bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-        except Exception as error:  # noqa: BLE001 - any bad frame just gets skipped
-            if not self.warned:
-                self.bridge.get_logger().warning(
-                    f"Cannot convert the video frame: {error}")
-                self.warned = True
-            return None
-        height, width = frame.shape[:2]
-        if width > self.width:
-            frame = cv2.resize(frame, (self.width, round(height * self.width / width)),
-                               interpolation=cv2.INTER_AREA)
-        ok, jpeg = cv2.imencode(
-            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, self.quality])
-        return jpeg.tobytes() if ok else None
-
-    async def next_frame(self, seen, timeout):
-        """Wait for a frame newer than `seen`. Returns (jpeg or None, seq)."""
-        async with self.changed:
+            if msg is not None and seq != seen:
+                return seq
+            remaining = deadline - self.loop.time()
+            if remaining <= 0.0:
+                return None
             try:
-                await asyncio.wait_for(
-                    self.changed.wait_for(lambda: self.seq != seen or self.closed), timeout)
+                await asyncio.wait_for(self.arrived.wait(), remaining)
             except asyncio.TimeoutError:
-                return None, seen
-            return self.jpeg, self.seq
+                return None
+        return None
+
+    async def frame(self, profile, seen=None):
+        """The newest frame encoded for `profile` (an Encoded), or None if there is none.
+
+        A frame encoded for another viewer less than half a frame period ago counts as
+        the newest, unless it is `seen`, the one this viewer has already. Viewers of one
+        quality then share one encode per frame period instead of each encoding whichever
+        camera frame is newest when their turn comes.
+        """
+        msg, seq = self.bridge.latest_image()
+        if msg is None or self.closed:
+            return None
+        generation = self.generation
+        done = self.encoded.get(profile.name)
+        if done is not None and done.generation == generation and (
+                done.seq == seq or done.seq != seen
+                and self.loop.time() - done.time < 0.5 * profile.period):
+            return done
+        key = (profile.name, seq, generation)
+        future = self.pending.get(key)
+        if future is None:
+            future = self.loop.run_in_executor(
+                self.pool, self.encode, msg, seq, generation, profile, self.loop.time())
+            self.pending[key] = future
+            future.add_done_callback(
+                lambda finished, key=key: self.encode_finished(key, finished))
+        try:
+            # Shielded: a viewer that leaves must not cancel an encode others wait for
+            encoded = await asyncio.shield(future)
+        except asyncio.CancelledError:
+            if asyncio.current_task().cancelling():
+                raise
+            return None  # the encoder shut down
+        if encoded is None or encoded.generation != self.generation:
+            return None
+        return encoded
+
+    def encode_finished(self, key, future):
+        self.pending.pop(key, None)
+        if future.cancelled() or future.exception() is not None:
+            return
+        encoded = future.result()
+        if encoded is None or encoded.generation != self.generation:
+            return
+        name = key[0]
+        previous = self.encoded.get(name)
+        if previous is None or previous.generation != encoded.generation \
+                or previous.seq < encoded.seq:
+            self.encoded[name] = encoded
+
+    # Worker thread
+    def encode(self, msg, seq, generation, profile, requested):
+        decoded = self.decoded
+        if decoded is None or decoded[0] != (generation, seq):
+            try:
+                frame = self.cv_bridge.imgmsg_to_cv2(
+                    msg, desired_encoding="bgr8")
+            except Exception as error:  # noqa: BLE001 - any bad frame just gets skipped
+                if not self.warned:
+                    self.bridge.get_logger().warning(
+                        f"Cannot convert the video frame: {error}")
+                    self.warned = True
+                return None
+            # Several qualities of the same frame share the conversion and the resizes
+            decoded = self.decoded = ((generation, seq), frame, {})
+        _, frame, resized = decoded
+        height, width = frame.shape[:2]
+        if width > profile.width:
+            small = resized.get(profile.width)
+            if small is None:
+                small = resized[profile.width] = cv2.resize(
+                    frame, (profile.width, max(1, round(height * profile.width / width))),
+                    interpolation=cv2.INTER_AREA)
+            frame = small
+        ok, jpeg = cv2.imencode(
+            ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, profile.quality])
+        if not ok:
+            return None
+        self.encodes += 1
+        height, width = frame.shape[:2]
+        return Encoded(seq, generation, jpeg.tobytes(), width, height, requested)
 
     async def close(self):
         self.closed = True
-        async with self.changed:
-            self.changed.notify_all()
-        if self.task is not None:
-            self.task.cancel()
+        self.wake()
         self.pool.shutdown(wait=False, cancel_futures=True)
+
+
+# Linux values; Python's socket module does not export them
+TCP_NOTSENT_LOWAT = getattr(socket, "TCP_NOTSENT_LOWAT", 25)
+SIOCOUTQ = 0x5411  # bytes a TCP socket has not had acknowledged yet, sent or not
+
+
+def limit_unsent(transport, size):
+    """Let the kernel take at most about `size` unsent bytes for this connection.
+
+    Without a limit the kernel buffers megabytes, and on a slow link it fills with frames
+    the viewer sees seconds late. With TCP_NOTSENT_LOWAT the rest of a large frame waits in
+    asyncio's buffer instead, where backlog() sees it.
+    """
+    sock = transport.get_extra_info("socket")
+    if size <= 0 or sock is None:
+        return
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, TCP_NOTSENT_LOWAT, size)
+    except OSError:
+        pass  # not Linux: backlog() then only sees asyncio's buffer
+
+
+def backlog(transport):
+    """Bytes written to `transport` that the other end has not acknowledged yet.
+
+    asyncio's own buffer plus the kernel's unacknowledged bytes. The kernel part counts
+    data that has left but is still queued in the network (a busy Wi-Fi access point),
+    which asyncio's buffer alone cannot show.
+    """
+    pending = transport.get_write_buffer_size()
+    sock = transport.get_extra_info("socket")
+    if sock is not None:
+        try:
+            out = array.array("i", [0])
+            fcntl.ioctl(sock.fileno(), SIOCOUTQ, out, True)
+            pending += out[0]
+        except (OSError, ValueError):
+            pass
+    return pending
+
+
+async def wait_backlog(transport, limit, timeout, poll=0.01):
+    """Wait until at most `limit` bytes written to `transport` are unacknowledged.
+
+    Returns the seconds waited, or None if the connection closed or delivered nothing for
+    `timeout` s.
+    """
+    loop = asyncio.get_running_loop()
+    start = progress = loop.time()
+    pending = backlog(transport)
+    while pending > limit:
+        if transport.is_closing():
+            return None
+        if loop.time() - progress > timeout:
+            return None
+        await asyncio.sleep(poll)
+        left = backlog(transport)
+        if left < pending:
+            progress = loop.time()
+        pending = left
+    return loop.time() - start
 
 
 def same_origin(request):
@@ -715,28 +954,70 @@ class WebServer:
         return web.FileResponse(os.path.join(self.static_dir, name))
 
     async def stream(self, request):
-        """MJPEG: a never-ending multipart response, one JPEG part per frame."""
+        """MJPEG: a never-ending multipart response, one JPEG part per frame.
+
+        ?quality= is auto, high, medium or low (the video_default parameter otherwise).
+        ?client= names the page's WebSocket client, so the page can change the quality
+        without reconnecting and see the stream's rates in its telemetry.
+        """
+        quality = choose_quality(
+            request.query.get("quality"), self.bridge.video_default)
+        client = request.query.get("client")
+        if client not in self.clients:
+            client = None
         response = web.StreamResponse(headers={
             "Content-Type": "multipart/x-mixed-replace; boundary=frame",
             "Cache-Control": "no-store",
         })
         await response.prepare(request)
-        self.hub.add_viewer()
+        transport = request.transport
+        if transport is None:
+            return response
+        limit_unsent(transport, self.bridge.video_backlog)
+        loop = asyncio.get_running_loop()
+        hub = self.hub
+        viewer = Viewer(hub, client, quality, loop.time())
+        hub.add_viewer(viewer)
         try:
-            seen = -1
-            while not self.hub.closed:
-                jpeg, seen = await self.hub.next_frame(seen, timeout=1.0)
+            seen = None
+            due = loop.time()
+            while not hub.closed:
+                seq = await hub.wait_image(seen, timeout=1.0)
                 # aiohttp does not cancel handlers when the viewer leaves, so check
-                if request.transport is None or request.transport.is_closing():
+                if transport.is_closing():
                     break
-                if jpeg is not None:
-                    await response.write(
-                        b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
-                        + str(len(jpeg)).encode() + b"\r\n\r\n" + jpeg + b"\r\n")
+                if seq is None:
+                    continue
+                profile = viewer.profile
+                delay = due - loop.time()
+                if delay > 0.0:
+                    await asyncio.sleep(delay)
+                # Send the newest frame once the earlier ones have arrived, never a queue
+                # of old ones. Waiting is also how auto notices a connection that cannot
+                # keep up
+                waited = await wait_backlog(
+                    transport, self.bridge.video_backlog, STALLED_VIEWER)
+                if waited is None:
+                    break
+                encoded = await hub.frame(profile, seen)
+                if encoded is None:
+                    seen = seq  # a frame that cannot be encoded is not retried
+                    continue
+                seen = encoded.seq
+                await response.write(
+                    b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                    + str(len(encoded.jpeg)).encode() + b"\r\n\r\n" + encoded.jpeg + b"\r\n")
+                now = loop.time()
+                viewer.sent(encoded, waited > CONGESTED_SHARE * profile.period, now)
+                # The frame rate cap, timed from the encode: viewers who shared it stay in
+                # step and share the next one too. No bursts to catch up after a slow frame
+                due = max(encoded.time + profile.period, now)
         except ConnectionError:
             pass
         finally:
-            self.hub.remove_viewer()
+            hub.remove_viewer(viewer)
+            if not transport.is_closing() and transport.get_write_buffer_size() > 0:
+                transport.abort()  # stalled: closing politely would wait for the backlog
         return response
 
     # WebSocket ----------------------------------------------------------------------
@@ -777,6 +1058,11 @@ class WebServer:
                            "stop": bridge.stop_distance},
             "gizmo": {"yaw": bridge.yaw_limit, "pitch_min": bridge.pitch_min,
                       "pitch_max": bridge.pitch_max},
+            "video": {
+                "default": bridge.video_default,
+                "qualities": [{"name": profile.name, "width": profile.width,
+                               "fps": profile.fps} for profile in bridge.video_profiles],
+            },
         }
 
     async def handle(self, ws, client, remote, text):
@@ -805,6 +1091,9 @@ class WebServer:
             self.spawn(self.change_mode(ws, client, data.get("mode")))
         elif kind == "person":
             self.spawn(self.person_action(ws, client, data.get("action")))
+        elif kind == "video":
+            # Only this client's own streams; watching needs no driver lock
+            self.hub.set_quality(client, data.get("quality"))
 
     def spawn(self, coroutine):
         # Long actions run as tasks so the socket keeps reading (e-stop included)
@@ -848,8 +1137,9 @@ class WebServer:
 
     async def send_state(self, client, ws, shared, holder):
         driver = "none" if holder is None else "you" if holder == client else "other"
+        state = {**shared, "driver": driver, "video": self.hub.stats(client)}
         # A slow phone must not hold up everyone else's telemetry
-        await asyncio.wait_for(ws.send_str(json.dumps({**shared, "driver": driver})), 1.0)
+        await asyncio.wait_for(ws.send_str(json.dumps(state)), 1.0)
 
     # Modes --------------------------------------------------------------------------
 

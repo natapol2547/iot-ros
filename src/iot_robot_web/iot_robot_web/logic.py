@@ -215,3 +215,122 @@ def host_allowed(host, names):
     except ValueError:
         return False
     return True
+
+
+# Video ------------------------------------------------------------------------------
+
+# Fixed video qualities, best first. The page also offers "auto", which picks one of these
+# per viewer from how well that viewer's connection keeps up
+VIDEO_QUALITIES = ("high", "medium", "low")
+AUTO = "auto"
+
+
+_VideoProfile = collections.namedtuple("VideoProfile", ["name", "width", "quality", "fps"])
+
+
+class VideoProfile(_VideoProfile):
+    """One video quality: frames at most `width` pixels wide, JPEG `quality`, `fps` cap."""
+
+    __slots__ = ()
+
+    @property
+    def period(self):
+        return 1.0 / self.fps
+
+
+def video_profile(name, width, quality, fps):
+    """A VideoProfile with every value forced into a range the encoder accepts."""
+    return VideoProfile(name, max(int(width), 16), int(clamp(quality, 1, 100)),
+                        clamp(float(fps), 0.5, 60.0))
+
+
+def choose_quality(requested, default):
+    """The quality a viewer asked for, or `default` for anything unknown."""
+    return requested if requested == AUTO or requested in VIDEO_QUALITIES else default
+
+
+class AdaptiveQuality:
+    """Picks the video quality for one viewer of the "auto" setting.
+
+    The server cannot see the viewer's screen, only its own send buffer. A frame that must
+    wait for the previous one to leave means the connection is slower than the stream, so
+    each sent frame is reported with `sent(congested, now)`.
+
+    - Down: when half of the last `window` frames were congested, one level lower. The
+      window starts empty after every change, so a new level always gets a fair trial.
+    - Up: after `probe` s without a congested frame, one level higher. A step up that
+      congests again within `trial` s doubles the wait before the next try (up to
+      `max_probe`), so a connection that sits between two levels settles on the lower one
+      instead of flipping between them. A step up that holds halves it again.
+    - No change within `hold` s of the previous one.
+
+    Levels are indices into a list of qualities ordered best first. Times are in seconds
+    from any monotonic clock.
+    """
+
+    def __init__(self, levels, start, now, window=8, hold=2.0, probe=8.0, trial=10.0,
+                 max_probe=64.0):
+        self.levels = levels
+        self.index = int(clamp(start, 0, levels - 1))
+        self.window = max(int(window), 2)
+        self.hold = hold
+        self.base_probe = probe
+        self.probe = probe
+        self.trial = trial
+        self.max_probe = max(max_probe, probe)
+        self.recent = collections.deque(maxlen=self.window)
+        self.changed = now
+        self.clear_since = now
+        self.probed = None  # when the latest step up happened, while it is on trial
+
+    def sent(self, congested, now):
+        """Record one sent frame. Returns the (possibly new) level index."""
+        self.recent.append(bool(congested))
+        if congested:
+            self.clear_since = now
+        elif self.probed is not None and now - self.probed >= self.trial:
+            # The step up held: the next probe may come sooner again
+            self.probed = None
+            self.probe = max(self.base_probe, self.probe / 2.0)
+        if now - self.changed < self.hold:
+            return self.index
+        if sum(self.recent) * 2 >= self.window and self.index < self.levels - 1:
+            if self.probed is not None and now - self.probed < self.trial:
+                self.probe = min(self.probe * 2.0, self.max_probe)
+            self.probed = None
+            self.change(self.index + 1, now)
+        elif now - self.clear_since >= self.probe and self.index > 0:
+            self.probed = now
+            self.change(self.index - 1, now)
+        return self.index
+
+    def change(self, index, now):
+        self.index = index
+        self.recent.clear()
+        self.changed = now
+        self.clear_since = now
+
+
+class RateMeter:
+    """Frames per second and bits per second over the last `span` seconds."""
+
+    def __init__(self, span=2.0):
+        self.span = span
+        self.events = collections.deque()  # (time, bytes)
+
+    def add(self, size, now):
+        self.events.append((now, size))
+        self.trim(now)
+
+    def trim(self, now):
+        while self.events and now - self.events[0][0] > self.span:
+            self.events.popleft()
+
+    def rates(self, now):
+        """(fps, bits per second). Both 0 when nothing was sent within the span."""
+        self.trim(now)
+        if not self.events:
+            return 0.0, 0.0
+        frames = len(self.events)
+        size = sum(event[1] for event in self.events)
+        return frames / self.span, 8.0 * size / self.span

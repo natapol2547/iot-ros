@@ -3,8 +3,9 @@ import math
 import pytest
 
 from iot_robot_web.logic import (
-    FASTEST_BLINK, GREEN, NO_DATA, RED, SLOWEST_BLINK, YELLOW, DriverLock, EchoFilter,
-    braking_distance, classify_range, guard_command, host_allowed, scale_command)
+    AUTO, FASTEST_BLINK, GREEN, NO_DATA, RED, SLOWEST_BLINK, YELLOW, AdaptiveQuality,
+    DriverLock, EchoFilter, RateMeter, braking_distance, choose_quality, classify_range,
+    guard_command, host_allowed, scale_command, video_profile)
 
 
 class TestDriverLock:
@@ -211,3 +212,114 @@ class TestHostAllowed:
     def test_extra_names_and_wildcard(self):
         assert host_allowed("robot.lan:8080", self.NAMES | {"robot.lan"})
         assert host_allowed("anything.example", {"*"})
+
+
+class TestVideoSettings:
+    def test_profile_values_are_kept_in_range(self):
+        assert video_profile("low", 2, 300, 0.0) == ("low", 16, 100, 0.5)
+        assert video_profile("high", 640.0, 70.0, 15) == ("high", 640, 70, 15.0)
+        assert video_profile("high", 640, 70, 15.0).period == pytest.approx(1 / 15)
+
+    @pytest.mark.parametrize("requested, chosen", [
+        ("auto", AUTO), ("high", "high"), ("medium", "medium"), ("low", "low"),
+        ("off", "medium"), ("HIGH", "medium"), (None, "medium"), ("", "medium"),
+    ])
+    def test_unknown_qualities_get_the_default(self, requested, chosen):
+        assert choose_quality(requested, "medium") == chosen
+
+
+def run(chooser, congested, seconds, now, fps=10.0):
+    """Feed `seconds` of frames at `fps` to the chooser. Returns the time and the levels."""
+    levels = []
+    for _ in range(round(seconds * fps)):
+        now += 1.0 / fps
+        levels.append(chooser.sent(congested, now))
+    return now, levels
+
+
+class TestAdaptiveQuality:
+    def test_steps_down_once_the_hold_time_has_passed(self):
+        auto = AdaptiveQuality(3, 1, now=0.0, hold=2.0)
+        now, levels = run(auto, True, 1.9, 0.0)
+        assert set(levels) == {1}
+        now, levels = run(auto, True, 0.2, now)
+        assert levels[-1] == 2
+
+    def test_a_new_level_gets_a_fair_trial(self):
+        # The window empties at every change: one congested frame is not enough to go on
+        auto = AdaptiveQuality(3, 0, now=0.0, window=8, hold=0.0)
+        now, _ = run(auto, True, 0.4, 0.0)
+        assert auto.index == 1
+        # Half of the window must fill again on the new level
+        now, levels = run(auto, True, 0.3, now)
+        assert levels == [1, 1, 1]
+        _, levels = run(auto, True, 0.1, now)
+        assert levels == [2]
+
+    def test_occasional_congestion_does_not_step_down(self):
+        auto = AdaptiveQuality(3, 1, now=0.0, window=8)
+        now = 0.0
+        for frame in range(200):
+            now += 0.1
+            # one frame in four waited: Wi-Fi hiccups, not a slow link
+            assert auto.sent(frame % 4 == 0, now) <= 1
+        assert auto.index != 2
+
+    def test_never_leaves_the_range(self):
+        auto = AdaptiveQuality(3, 2, now=0.0, hold=0.0)
+        _, levels = run(auto, True, 10.0, 0.0)
+        assert max(levels) == 2
+        auto = AdaptiveQuality(3, 0, now=0.0, hold=0.0, probe=1.0)
+        _, levels = run(auto, False, 30.0, 0.0)
+        assert min(levels) == 0 and max(levels) == 0
+
+    def test_probes_upwards_on_a_clear_connection(self):
+        auto = AdaptiveQuality(3, 2, now=0.0, hold=2.0, probe=8.0)
+        now, levels = run(auto, False, 7.9, 0.0)
+        assert set(levels) == {2}
+        now, levels = run(auto, False, 0.2, now)
+        assert levels[-1] == 1
+        now, levels = run(auto, False, 8.2, now)
+        assert levels[-1] == 0
+
+    def test_failed_probes_back_off(self):
+        # The link fits the middle level only: each step up congests at once
+        auto = AdaptiveQuality(3, 1, now=0.0, hold=2.0, probe=8.0, trial=10.0)
+        now = 0.0
+        ups = []
+        for _ in range(1500):  # 150 s
+            now += 0.1
+            before = auto.index
+            level = auto.sent(auto.index == 0, now)
+            if level < before:
+                ups.append(round(now, 1))
+        assert len(ups) >= 3
+        gaps = [b - a for a, b in zip(ups, ups[1:])]
+        # Each failed probe doubles the wait before the next one (8, 16, 32 s plus the trial)
+        assert gaps == sorted(gaps)
+        assert gaps[-1] > gaps[0] * 1.5
+        assert auto.probe <= 64.0
+
+    def test_a_probe_that_holds_shortens_the_next_wait(self):
+        auto = AdaptiveQuality(3, 1, now=0.0, hold=2.0, probe=8.0, trial=10.0)
+        auto.probe = 32.0
+        now, _ = run(auto, False, 32.1, 0.0)
+        assert auto.index == 0
+        run(auto, False, 10.5, now)
+        assert auto.probe == 16.0
+
+
+class TestRateMeter:
+    def test_rates_over_the_span(self):
+        meter = RateMeter(span=2.0)
+        for i in range(20):
+            meter.add(1000, i * 0.1)
+        fps, bps = meter.rates(1.95)
+        assert fps == pytest.approx(10.0)
+        assert bps == pytest.approx(80000.0)
+
+    def test_old_frames_fall_out(self):
+        meter = RateMeter(span=2.0)
+        meter.add(5000, 0.0)
+        assert meter.rates(1.0) == (0.5, 20000.0)
+        assert meter.rates(2.5) == (0.0, 0.0)

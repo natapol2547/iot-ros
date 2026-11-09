@@ -10,9 +10,20 @@ web_controller:
     # block DNS rebinding. ["*"] accepts every name
     # allowed_hosts: ["robot.lan"]
     telemetry_rate: 10.0         # Hz, state pushed to every browser
-    stream_fps: 10.0             # MJPEG frame rate cap
-    stream_width: 640            # frames wider than this are scaled down before encoding
-    jpeg_quality: 70
+
+    # Video. Each browser picks a quality on the page; "auto" picks one of these per
+    # browser from how well its connection keeps up, starting at medium. Each quality
+    # caps the frame width (wider frames are scaled down), the JPEG quality (1 to 100)
+    # and the frame rate. A frame is encoded once per quality, however many watch it
+    video:
+      high:   {width: 640, quality: 70, fps: 15.0}   # about 3 Mb/s
+      medium: {width: 480, quality: 60, fps: 10.0}   # about 1.2 Mb/s
+      low:    {width: 320, quality: 50, fps: 8.0}    # about 0.5 Mb/s
+    video_default: auto          # auto, high, medium or low, until a browser picks
+    # A browser gets its next frame only once less than this many bytes of the earlier
+    # ones are still on their way. On slow Wi-Fi frames are skipped instead of piling up
+    # as seconds of lag. Larger is smoother over long round trips, smaller lags less
+    video_backlog: 16384
 
     # Driving. Every browser command is scaled into these limits
     max_linear: 0.4              # m/s
