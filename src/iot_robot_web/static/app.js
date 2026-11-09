@@ -245,7 +245,9 @@
 
   const video = $("video");
   const qualitySelect = $("quality-select");
+  const VIDEO_LOST_MS = 3000; // the robot reports no stream for this browser: start one
   let videoRetry = null;
+  let videoMissingSince = null;
 
   function storageGet(key) {
     try {
@@ -296,6 +298,7 @@
 
   function startVideo() {
     clearTimeout(videoRetry);
+    videoMissingSince = null;
     const quality = videoQuality();
     if (document.hidden || !state.connected || quality === "off") return;
     // The client id lets the robot switch this stream's quality without a reconnect and
@@ -315,6 +318,15 @@
   video.addEventListener("error", () => {
     clearTimeout(videoRetry);
     videoRetry = setTimeout(startVideo, 2000);
+  });
+
+  // The menu's native popup takes the keyboard: a drive key held while it opens never sees
+  // its keyup and would keep the robot driving. Let go of everything first
+  qualitySelect.addEventListener("pointerdown", () => stopDriving());
+  qualitySelect.addEventListener("focus", () => stopDriving());
+  qualitySelect.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === "F4" ||
+        (event.altKey && event.key.startsWith("Arrow"))) stopDriving();
   });
 
   qualitySelect.addEventListener("change", () => {
@@ -364,29 +376,40 @@
     }
   }
 
+  // A stream the robot dropped (it stalled) ends without an error event in some browsers.
+  // The robot reports this browser's stream in every state message, so notice it is gone
+  function checkStream(t) {
+    if (!state.videoStreaming || t.video) {
+      videoMissingSince = null;
+    } else if (videoMissingSince === null) {
+      videoMissingSince = performance.now();
+    } else if (performance.now() - videoMissingSince > VIDEO_LOST_MS) {
+      startVideo();
+    }
+  }
+
   function renderVideo(t) {
     renderQuality(t);
-    if (videoQuality() === "off") {
-      app.dataset.video = "off";
-      $("video-empty-title").textContent = "Video is off";
-      $("video-empty-sub").textContent =
-        "Saves Wi-Fi and the robot's CPU. Pick a quality to watch again.";
-      return;
-    }
-    if (!t) return;
-    const live = t.video_age !== null && t.video_age < VIDEO_STALE_S;
-    app.dataset.video = live ? "live" : "waiting";
-    if (live) return;
+    if (t) checkStream(t);
     let title = "Waiting for video";
     let sub = "The camera stream starts in a moment";
-    if (t.mode !== "drive" && t.mode_status === "starting") {
+    if (videoQuality() === "off") {
+      title = "Video is off";
+      sub = "Saves Wi-Fi and the robot's CPU. Pick a quality to watch again.";
+    } else if (t && t.mode !== "drive" && t.mode_status === "starting") {
       title = `Starting the ${t.mode} detector`;
       sub = "Its annotated view appears here once it runs";
-    } else if (t.mode !== "drive") {
+    } else if (t && t.mode !== "drive") {
       sub = "Waiting for the detector's annotated view";
     }
+    // Also what shows when the telemetry goes quiet, so keep it current even while live
     $("video-empty-title").textContent = title;
     $("video-empty-sub").textContent = sub;
+    if (videoQuality() === "off") {
+      app.dataset.video = "off";
+    } else if (t) {
+      app.dataset.video = t.video_age !== null && t.video_age < VIDEO_STALE_S ? "live" : "waiting";
+    }
   }
 
   document.addEventListener("visibilitychange", () => {
@@ -554,6 +577,7 @@
   const knob = $("joy-knob");
   const joy = { pointer: null, x: 0, y: 0 };
   const keys = new Set();
+  const ignoredKeys = new Set(); // pressed on the slider or the menu: not for driving
   const DRIVE_KEYS = {
     KeyW: [1, 0], ArrowUp: [1, 0], KeyS: [-1, 0], ArrowDown: [-1, 0],
     KeyA: [0, 1], ArrowLeft: [0, 1], KeyD: [0, -1], ArrowRight: [0, -1],
@@ -799,10 +823,12 @@
       if (!state.estop) engage();
       return;
     }
-    // Arrow keys adjust a focused slider or menu instead of driving
+    // Arrow keys adjust a focused slider or menu instead of driving. A key held there keeps
+    // not driving after the control lets go of focus, while it auto-repeats
     const onControl = document.activeElement === speedRange ||
       document.activeElement === qualitySelect;
-    if (DRIVE_KEYS[event.code] && !(onControl && event.code.startsWith("Arrow"))) {
+    if (onControl && event.code.startsWith("Arrow")) ignoredKeys.add(event.code);
+    if (DRIVE_KEYS[event.code] && !ignoredKeys.has(event.code)) {
       event.preventDefault();
       if (!event.repeat && !canControl()) toast(lockReason());
       keys.add(event.code);
@@ -811,6 +837,7 @@
   window.addEventListener("keyup", (event) => {
     if (event.code === "Space") event.preventDefault();
     keys.delete(event.code);
+    ignoredKeys.delete(event.code);
   });
 
   // Modes -------------------------------------------------------------------------------

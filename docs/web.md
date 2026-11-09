@@ -60,7 +60,7 @@ pixi run -e robot ros2 launch iot_robot_web web.launch.py port:=8081
 | **Mode** | Drive, Follow ball or Follow person. The status line shows starting, running or failed (with the last line the follower printed). |
 | **Camera aim** | Drive mode only. Drag the dot to pan left/right and tilt up; Centre levels the camera. |
 | **Follow person** | Raise both hands for 2 s in front of the robot to enroll, or press "Enroll person in view" to enroll the person nearest the image centre. Forget clears the enrolled person. |
-| **Video quality** | The chip in the bottom right corner of the video. **Auto** (the default) adapts to this browser's connection; **High** (640 px, up to 15 fps, about 3 Mb/s), **Medium** (480 px, 10 fps, about 1.2 Mb/s) and **Low** (320 px, 8 fps, about 0.5 Mb/s) stay fixed; **Off** stops the video. The chip shows what actually arrives, e.g. "Auto 360p 10 fps, 1.2 Mb/s" (only the resolution on phones). Each browser chooses for itself and remembers it; with the browser's data saver on, a first visit starts at Low. |
+| **Video quality** | The chip in the bottom right corner of the video. **Auto** (the default) adapts to this browser's connection; **High** (640 px, up to 15 fps, about 3 to 6 Mb/s depending on the scene), **Medium** (480 px, 10 fps, about 1.2 to 2 Mb/s) and **Low** (320 px, 8 fps, about 0.5 to 0.8 Mb/s) stay fixed; **Off** stops the video. The chip shows what actually arrives, e.g. "Auto 360p 10 fps, 1.2 Mb/s", or less of it where the picture is small. Opening the menu lets go of the joystick and keys, since the menu takes the keyboard. Each browser chooses for itself and remembers it; with the browser's data saver on, a first visit starts at Low. |
 
 The **ultrasonic lights** show each sensor separately:
 
@@ -97,7 +97,10 @@ quality and the robot keeps the picture current rather than complete:
   only once the earlier ones have arrived (`video_backlog`). On a weak link it skips frames
   instead of queueing them. Measured on a 0.5 Mb/s link: before this change the picture fell
   further behind by about 0.7 s every second, 18 s behind after 24 s, then raced through
-  the backlog when the link recovered. Now it stays about half a second behind.
+  the backlog when the link recovered. Now it stays about 0.4 s behind.
+- **Each frame shows as soon as it arrives.** Browsers display an MJPEG frame only once the
+  next frame's header has arrived, so the robot sends that header straight after each
+  frame. Before, every frame appeared one frame period late (100 ms at Medium).
 - **Auto** starts at Medium. When at least half of the recent frames had to wait for the
   connection, it steps down a level (at most once every 2 s); after 8 s without waiting it
   tries one level up. A step up that has to come back down within 10 s doubles the wait
@@ -177,7 +180,9 @@ in the terminal it was started from.
   nodes, so no follower is left driving the robot.
 - **The server enforces every limit.** The page only asks. The server clamps speeds and gizmo
   angles, ignores malformed or non-finite numbers, applies the obstacle guard and the driver
-  lock, and caps WebSocket messages at 4 KB.
+  lock, and caps WebSocket messages at 4 KB. A message it cannot handle is ignored rather
+  than closing the socket, which also carries that browser's STOP. At most 12 video streams
+  run at once, 4 per computer; more get `503`.
 - **Other websites cannot drive the robot through a visitor's browser.** Two checks work
   together:
   - The WebSocket is accepted only when its `Origin` matches the `Host` it connected to. This
@@ -207,8 +212,8 @@ Floats keep their decimal point, because ROS parameters are typed.
 | `video.high` | `{width: 640, quality: 70, fps: 15.0}` | The High quality: frames at most `width` px wide (wider ones are scaled down), JPEG `quality` 1 to 100, at most `fps` frames a second |
 | `video.medium` | `{width: 480, quality: 60, fps: 10.0}` | The Medium quality, where Auto starts |
 | `video.low` | `{width: 320, quality: 50, fps: 8.0}` | The Low quality |
-| `video_default` | `auto` | What a browser gets until its viewer picks a quality: `auto`, `high`, `medium` or `low` |
-| `video_backlog` | `16384` | Bytes. A browser gets its next frame only once less than this much of the earlier ones is still on its way to it, so a slow connection skips frames instead of lagging. Larger is smoother over long round trips; smaller lags less |
+| `video_default` | `auto` | What a browser gets until its viewer picks a quality: `auto`, `high`, `medium`, `low` or `off` (no video until the viewer picks one). Anything else falls back to `auto` with a warning |
+| `video_backlog` | `16384` | Bytes. A browser gets its next frame only once less than this much of the earlier ones is still on its way to it, so a slow connection skips frames instead of lagging. On a fast connection with a long round trip (a phone saving power on Wi-Fi) up to 4 times this is allowed, as much as the path holds without queueing, so High keeps its frame rate. Smaller lags less on slow links |
 | `max_linear` | `0.4` | m/s at full joystick and 100 % speed |
 | `max_angular` | `1.5` | rad/s at full joystick and 100 % speed |
 | `turbo_speed` | `3.0` | Highest speed slider value with Turbo on (3.0 = 300 %). `1.0` hides the button. `diff_drive_controller` clips anything above its own limits in `controllers.yaml` (1.2 m/s, 4.5 rad/s) |
@@ -288,13 +293,32 @@ Floats keep their decimal point, because ROS parameters are typed.
     access point. `TCP_NOTSENT_LOWAT` keeps the kernel from taking a large frame all at once.
     Without these limits the kernel's send buffer grows to megabytes, and on a slow link it
     fills with frames the viewer sees many seconds late.
+  - The limit grows, up to 4 × `video_backlog`, to the connection's bandwidth-delay
+    product: the kernel's delivery rate times its smallest round trip (`TCP_INFO`). The
+    smallest round trip leaves out queueing, so a slow or congested link keeps the plain
+    limit, while a fast link with a long round trip keeps more than one High frame in
+    flight instead of waiting a round trip for each.
   - **Auto** learns from that wait: a frame that waited more than a quarter of its frame
     period counts as congested (`AdaptiveQuality` in `logic.py`).
+  - **Part headers go out early.** Each JPEG is followed at once by the next part's
+    boundary and header (`PART`), with no `Content-Length`. Chrome, Firefox and Safari all
+    finish a part only when the next boundary (Chrome and Safari: and its header) arrives,
+    so sending the header with the next frame showed every frame a frame period late.
   - `client=` ties the stream to the page's WebSocket, so a `video` message switches its
     quality without a reconnect and `state` reports its rates. Only the browser's own
-    streams can be changed; a `client` that is not connected is ignored.
+    streams can be changed; a `client` that is not connected is ignored. A new stream of
+    the same client closes its old one, which some browsers leave open after a reload,
+    holding one of their few connections to the robot.
+  - **Stalled viewers are dropped.** A stream whose connection takes nothing for 10 s is
+    aborted, not ended politely: a browser that receives a complete response does not
+    reconnect, and an aborted one does. The page also restarts its stream when the
+    telemetry stops reporting one for 5 s.
   - The image subscription keeps only the newest frame (depth 1). A deeper queue would make
     a busy node work through frames that are already out of date.
+  - Frames are scaled down with `INTER_AREA` when halving or more and `INTER_LINEAR`
+    otherwise: `INTER_AREA` takes a slow path at 640 to 480 (about 5 times the time) and
+    looks the same there. OpenCV runs single-threaded (`cv2.setNumThreads(1)`), as in the
+    other nodes.
 - **Follow modes** are the same launch files as `pixi run follow` and
   `pixi run follow-person`, started with `ros2 launch` as a child process in its own session.
   Switching modes sends SIGINT, waits up to `stop_timeout`, then kills the whole process group,

@@ -223,6 +223,7 @@ def host_allowed(host, names):
 # per viewer from how well that viewer's connection keeps up
 VIDEO_QUALITIES = ("high", "medium", "low")
 AUTO = "auto"
+OFF = "off"  # only as a default for new pages: they then show no video until asked
 
 
 _VideoProfile = collections.namedtuple("VideoProfile", ["name", "width", "quality", "fps"])

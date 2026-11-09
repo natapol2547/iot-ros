@@ -219,6 +219,9 @@ button, input { font: inherit; color: inherit; }
 .video-frame {
   position: relative;
   aspect-ratio: 4 / 3;
+  /* The HUD below fits itself to the picture, which is much narrower than the screen on a
+     phone held sideways */
+  container-type: inline-size;
 }
 
 .video img {
@@ -310,6 +313,20 @@ button, input { font: inherit; color: inherit; }
 .quality-res, .quality-rate { color: var(--muted); font-weight: 500; }
 .quality-res:empty, .quality-rate:empty { display: none; }
 .quality-rate { display: none; }
+
+/* What the chip shows, by the width of the picture */
+@container (min-width: 600px) {
+  .quality-rate:not(:empty) { display: inline; }
+}
+@container (max-width: 389px) {
+  .quality-res { display: none; }
+  .hud { left: 8px; right: 8px; gap: 6px; }
+  .hud-bottom { bottom: 8px; }
+  .readout, .quality { gap: 5px; padding: 4px 8px; }
+}
+@container (max-width: 319px) {
+  .readout-label { display: none; }
+}
 .caret {
   width: 0;
   height: 0;
@@ -932,7 +949,6 @@ kbd {
   .toast { bottom: 24px; }
 
   .wide-only { display: inline; }
-  .quality-rate:not(:empty) { display: inline; }
   .sonar { grid-template-columns: minmax(0, 1fr) 190px minmax(0, 1fr); gap: 18px; padding: 16px 22px; }
   .sonar-side { gap: 16px; }
   .sonar-read { flex: 1; max-width: 300px; }
@@ -954,7 +970,6 @@ kbd {
   .estop-title { font-size: 22px; }
   .video-bar { padding: 4px 8px; }
   .video-bar .tag { padding: 3px 9px; font-size: 12px; }
-  .quality-rate:not(:empty) { display: none; }
   .estop-veil { padding-top: 44px; }
   .sonar { grid-template-columns: minmax(0, 1fr) 90px minmax(0, 1fr); padding: 8px 12px; gap: 10px; }
   .lamp { width: 16px; height: 16px; }
@@ -977,14 +992,7 @@ kbd {
   .stage { gap: 20px; }
 }
 
-@media (max-width: 420px) {
-  .quality-res { display: none; }
-}
-
 @media (max-width: 370px) {
-  .hud { left: 8px; right: 8px; gap: 6px; }
-  .hud-bottom { bottom: 8px; }
-  .readout, .quality { gap: 5px; padding: 4px 8px; }
   .sonar { grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr); gap: 6px; }
   .sonar-value b { font-size: 23px; }
   .joystick { --size: 148px; }
