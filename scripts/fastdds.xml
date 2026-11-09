@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fast DDS settings for every node started through pixi (scripts/activate.sh).
+
+  The same transports as Fast DDS's default (shared memory, then UDP), with a larger
+  shared-memory segment. The default segment, 512 KiB, is smaller than one 640 x 480
+  camera frame (900 KB): with two image subscribers on the laptop, 6 to 26 % of the
+  30 Hz frames were lost, and the detector and the web page saw the gaps. With 8 MiB both
+  received all 30 Hz. The segment is in /dev/shm and only takes memory as it fills.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>shm_large</transport_id>
+      <type>SHM</type>
+      <segment_size>8388608</segment_size>
+    </transport_descriptor>
+    <transport_descriptor>
+      <transport_id>udp</transport_id>
+      <type>UDPv4</type>
+    </transport_descriptor>
+  </transport_descriptors>
+  <participant profile_name="iot_robot" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_large</transport_id>
+        <transport_id>udp</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>

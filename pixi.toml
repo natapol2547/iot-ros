@@ -34,6 +34,9 @@ follow = "ros2 launch iot_robot_behavior ball_follow.launch.py use_sim_time:=$IO
 follow-person = "ros2 launch iot_robot_behavior person_follow.launch.py use_sim_time:=$IOT_USE_SIM_TIME"
 enroll = "ros2 service call /person_detector/enroll std_srvs/srv/Trigger"
 forget = "ros2 service call /person_detector/forget std_srvs/srv/Trigger"
+# Times each stage of the person detector on this computer and estimates its rate.
+# Extra arguments are appended, e.g. `pixi run -e robot bench-person --threads 2 4`.
+bench-person = "ros2 run iot_robot_perception bench_person"
 # Real-robot launch with mock_components instead of the motors. Extra
 # arguments are appended, e.g. `pixi run robot-mock web:=false`.
 robot-mock = "ros2 launch iot_robot_bringup robot.launch.py mock:=true camera:=false"

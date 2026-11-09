@@ -25,6 +25,7 @@ setup(
         "console_scripts": [
             "ball_detector = iot_robot_perception.ball_detector:main",
             "person_detector = iot_robot_perception.person_detector:main",
+            "bench_person = iot_robot_perception.bench_person:main",
         ],
     },
 )

@@ -5,19 +5,20 @@ from collections import namedtuple
 
 import cv2
 import numpy as np
-import onnxruntime as ort
 import rclpy
 from cv_bridge import CvBridge
 from geometry_msgs.msg import PointStamped
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data)
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, Image
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import Buffer, TransformException, TransformListener
 
+from iot_robot_perception.inference import onnx_session
 from iot_robot_perception.reid import Gallery, ReidEncoder
 
 # COCO keypoint indices
@@ -29,6 +30,13 @@ SKELETON = [(5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12),
 # Optical frame (x right, y down, z forward) to a level frame (x forward, y left, z up)
 OPTICAL_TO_LEVEL = np.array(
     [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]])
+
+# Only the newest camera frame. The detector is slower than the camera, and with a deeper
+# queue it would take the oldest waiting frame each time: on a Raspberry Pi 4, at about
+# 6 Hz against a 30 Hz camera, frames several camera periods old
+LATEST_FRAME = QoSProfile(
+    history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT,
+    durability=DurabilityPolicy.VOLATILE)
 
 # A detected person whose torso is visible
 Person = namedtuple(
@@ -72,6 +80,12 @@ class PersonDetector(Node):
         person_height = self.declare_parameter("person_height", 1.70).value
         torso_ratio = self.declare_parameter("torso_ratio", 0.29).value
         num_threads = self.declare_parameter("num_threads", 4).value
+        # The ReID network is too thin to share out: more threads only add hand-over
+        # time (2.4 ms with 1 thread, 4.7 ms with 4 on the development laptop)
+        reid_threads = self.declare_parameter("reid_threads", 1).value
+        # Let ONNX Runtime's threads busy-wait between frames. Slightly faster runs, but
+        # the cores stay busy for the other nodes too
+        spinning = self.declare_parameter("spin_threads", False).value
         # A frame whose z axis points straight up, e.g. base_link on a flat floor. Leave
         # empty when there is no TF (a webcam on a desk) to assume the camera is level
         self.level_frame = self.declare_parameter("level_frame", "").value
@@ -90,12 +104,9 @@ class PersonDetector(Node):
         # unlike shoulder width, and stays in view when the legs are cut off up close
         self.torso_length = person_height * torso_ratio
 
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = num_threads
-        self.session = ort.InferenceSession(
-            model_path, options, providers=["CPUExecutionProvider"])
+        self.session = onnx_session(model_path, num_threads, spinning)
         self.input_name = self.session.get_inputs()[0].name
-        self.encoder = ReidEncoder(reid_model_path, num_threads)
+        self.encoder = ReidEncoder(reid_model_path, reid_threads, spinning)
         self.gallery = Gallery(recent_size)
 
         self.enroll_start = None  # image time (s) when both hands went up
@@ -112,7 +123,7 @@ class PersonDetector(Node):
         self.create_subscription(
             CameraInfo, "/camera/camera_info", self.on_camera_info, qos_profile_sensor_data)
         self.create_subscription(
-            Image, "/camera/image_raw", self.on_image, qos_profile_sensor_data)
+            Image, "/camera/image_raw", self.on_image, LATEST_FRAME)
         self.position_pub = self.create_publisher(
             PointStamped, "/person/position", 10)
         self.debug_pub = self.create_publisher(

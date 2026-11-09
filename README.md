@@ -113,6 +113,7 @@ pixi run ros2 run rqt_image_view rqt_image_view /ball/debug_image
 | `follow-person` | Person detector + target follower in the sim (Step 6b) |
 | `enroll` | Calls `/person_detector/enroll`: remember the person nearest the image centre (Step 7) |
 | `forget` | Calls `/person_detector/forget`: clear the remembered person |
+| `bench-person` | Times every stage of the person detector on this computer and estimates its rate ([Running it on the Pi 4](#running-it-on-the-pi-4)) |
 | `web` | Browser controller for the sim on port 8080 |
 | `robot-mock` | The real robot's launch with simulated motors and no camera; extra arguments are appended |
 | `bridge` | STM32 bridge on its own (`/ultrasonic/*`, `/battery_state`) |
@@ -308,9 +309,50 @@ estimate against the depth camera. The error is below 1.5 % from 0.95 m to 3.7 m
   robot or its software is ever distributed commercially.
 - **Accuracy:** after webcam calibration, distances at 1, 2 and 3 m matched a tape measure with
   the default `torso_ratio` of 0.29.
-- **Speed:** about 6–8 Hz on the development laptop while the simulation is running. The
-  Ultralytics Pi 5 benchmark suggests roughly 10 Hz at 320 px; the robot's Pi 4 will be slower.
-  This still needs to be measured.
+- **Speed:** about 6–8 Hz on the development laptop while the simulation is running, and an
+  estimated 4–8 Hz on the Pi 4 (below). `pixi run -e robot bench-person` measures it.
+
+#### Running it on the Pi 4
+
+Person following needs about 4–5 detections a second at walking pace, with the target held
+in `odom` between them; 8–10 Hz is comfortable. The Pi 4 should manage, with little margin.
+
+- **Estimate:** YOLO26n-pose at 320 with ONNX Runtime on 4 threads takes about 110–200 ms on
+  a Pi 4, plus 10–25 ms of ReID per person, so **about 4–8 Hz, around 6 Hz**, with a fan.
+  Nobody has published a Pi 4 pose benchmark: this is scaled from Ultralytics' Pi 4 and Pi 5
+  results for the detect models (ONNX on the Pi 4 is 2.8–3.2 times slower than on the Pi 5)
+  and a Pi 4 YOLO26n NCNN measurement at 320 (6.5 FPS).
+- **Measure it:** stop the service (`sudo systemctl stop iot-robot`), then run
+  `pixi run -e robot bench-person`. It times letterboxing, the pose model and ReID at 1 to 4
+  threads, the web page's JPEG encodes, the estimated rate with 0–2 people, and what thread
+  spinning costs, and reports the CPU temperature and whether the Pi has throttled.
+  `--model` compares another export, e.g. one at 256 px (about 1.6 times faster; people
+  more than about 5 m away get too small to detect).
+- **Cooling:** inference is a sustained 4-core load. Without a fan a Pi 4 throttles from 80 °C,
+  within a few minutes, down to 1.0 GHz or lower (about 2.5–5 Hz). Fit a heatsink and a fan,
+  and check `vcgencmd get_throttled` after a session.
+- **Settings that matter** (`person_follow.yaml`):
+  - `num_threads` for the pose model: the bench suggests the fewest threads within 5 % of the
+    fastest, so spare cores are left for the camera, the controllers and the web page.
+  - `reid_threads` (1): OSNet x0.25 is too thin to share out; more threads only add hand-over
+    time.
+  - `spin_threads` (false): ONNX Runtime's threads otherwise busy-wait after each run. On the
+    laptop that made runs 9 % faster but used 55 % more CPU.
+  - The detector takes only the newest camera frame. With the old queue of 5, a detector at
+    about 4 Hz worked on frames 400 ms old on average, against 230 ms now.
+- **Also lighter on the Pi:** watch the video at Medium or Low while following, or turn it off.
+- **If it is not enough,** in order of value for money:
+  1. A **Raspberry Pi 5** (about $175 for 8 GB), CPU only: about 2.5–4.5 times faster, so pose
+     at 320 at roughly 15–30 Hz. Same pixi environment (linux-aarch64, Bookworm). It needs a
+     5 V 5 A supply (`PSU_MAX_CURRENT=5000` behind a buck converter), a 22-to-15-pin camera
+     cable, and a check for 16K memory pages (`getconf PAGESIZE`).
+  2. An **OAK-D Lite** (about $269): pose on the camera itself and stereo depth, which would
+     replace the torso-length distance estimate. Works with a Pi 4 or 5 over USB 3.
+  3. A Pi 5 with the **AI HAT+** (Hailo-8L, about $70) for much more headroom. Pi 5 only, and
+     it runs YOLOv8 or YOLO11 pose models, not YOLO26.
+  - Not worth it here: the Raspberry Pi AI Camera (works on a Pi 4, but only YOLO11n-pose,
+    quantized, at about 16 fps), a Coral USB accelerator (no current Python support), a
+    Jetson Orin Nano (now $399, and a different camera stack).
 
 #### Exporting the model
 
@@ -549,6 +591,19 @@ These cost real debugging time. Check here first when something similar breaks.
 - **Call `cv2.setNumThreads(1)` in every OpenCV node.** The conda OpenCV build uses OpenMP,
   and its thread pool fought the other nodes for CPU. With it, the ball detector went from 82 ms
   to 12 ms per frame. Before the fix, the gizmo jumped around and the robot lost the ball.
+- **Fast DDS's default shared-memory segment (512 KiB) is smaller than one 640 × 480 frame
+  (900 KB).** With two subscribers to a 30 Hz camera, 6–26 % of the frames were lost, so
+  the detector and the web page saw gaps. `scripts/fastdds.xml` keeps the default
+  transports with an 8 MiB segment, and both subscribers then received all 30 Hz.
+  `scripts/activate.sh` sets it for every `pixi run`, unless `FASTRTPS_DEFAULT_PROFILES_FILE`
+  is already set.
+- **A slow node must subscribe to images with depth 1.** rclpy takes the oldest message in
+  the queue, so with `qos_profile_sensor_data` (depth 5) a detector slower than the camera
+  always works on the fifth-newest frame. Measured with a 4 Hz detector: frames 400 ms old on
+  average with depth 5, 230 ms with depth 1, at the same rate.
+- **ONNX Runtime's threads spin between runs by default.** Set
+  `session.intra_op.allow_spinning` to 0 (`inference.py`) on a computer shared with other
+  nodes: on the laptop the same detection rate then used 1.0 instead of 1.6 cores.
 
 ### Testing
 
@@ -624,6 +679,8 @@ pixi run -e robot robot          # everything; the web page is on http://<pi>.lo
   [docs/hardware.md](docs/hardware.md#testing-without-hardware).
 - **Meshes:** the wheel STL meshes are 5.34 mm off-centre in local X. This is corrected with
   the URDF visual origin.
-- **Model format on the Pi:** start with ONNX at 320. Try NCNN if it is too slow; Ultralytics
-  benchmarks it about 2× faster on a Pi 5 (the robot has a Pi 4), but it needs a separate NMS
-  step.
+- **Model format on the Pi:** start with ONNX at 320 and measure with `bench-person`
+  ([Running it on the Pi 4](#running-it-on-the-pi-4)). Try NCNN if it is too slow: Ultralytics
+  measured it 1.35× faster than ONNX on a Pi 4 (YOLOv8n at 640) and about 2× on a Pi 5, but it
+  needs a separate NMS step. INT8 gains little on the Pi 4, whose cores lack the dot-product
+  instructions it relies on, and costs keypoint accuracy.
