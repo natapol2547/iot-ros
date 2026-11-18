@@ -33,3 +33,9 @@ if [ -d "${CONDA_PREFIX}/libexec/libcamera" ]; then
   export LIBCAMERA_IPA_PROXY_PATH="${CONDA_PREFIX}/libexec/libcamera"
   export LIBCAMERA_IPA_CONFIG_PATH="${CONDA_PREFIX}/share/libcamera/ipa"
 fi
+
+# Fast DDS's default shared-memory segment is smaller than one camera frame, so frames
+# were lost between nodes (scripts/fastdds.xml). A profile set by the user wins.
+if [ -z "${FASTRTPS_DEFAULT_PROFILES_FILE:-}" ]; then
+  export FASTRTPS_DEFAULT_PROFILES_FILE="${PIXI_PROJECT_ROOT:-.}/scripts/fastdds.xml"
+fi

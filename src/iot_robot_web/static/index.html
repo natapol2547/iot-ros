@@ -51,6 +51,13 @@
             <div class="hud hud-bottom">
               <span class="readout"><span class="readout-label">Speed</span><b class="num" id="speed">0.00</b><span class="unit">m/s</span></span>
               <span class="readout"><span class="readout-label">Turn</span><b class="num" id="turn">0.00</b><span class="unit">rad/s</span></span>
+              <label class="quality" id="quality" title="Video quality">
+                <span class="quality-name" id="quality-name">Auto</span><span class="quality-res num" id="quality-res"></span><span class="quality-rate num" id="quality-rate"></span><i class="caret" aria-hidden="true"></i>
+                <select id="quality-select" aria-label="Video quality">
+                  <option value="auto">Auto, adapts to your connection</option>
+                  <option value="off">Off, saves Wi-Fi and the robot's CPU</option>
+                </select>
+              </label>
             </div>
             <div class="guard" id="guard" role="alert" hidden></div>
           </div>

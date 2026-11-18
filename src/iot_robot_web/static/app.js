@@ -16,6 +16,7 @@
   const VIDEO_STALE_S = 2.0;
   const BLANK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
   const MODE_NAMES = { drive: "Drive", ball: "Follow ball", person: "Follow person" };
+  const QUALITY_NAMES = { auto: "Auto", high: "High", medium: "Medium", low: "Low", off: "Off" };
 
   const state = {
     ws: null,
@@ -31,6 +32,8 @@
     modePending: null,
     driver: "none",
     speed: 0.5,
+    videoChoice: null, // this browser's own video quality, null for the robot's default
+    videoStreaming: false,
   };
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -109,6 +112,8 @@
     setConnection("live");
     updateSpeed();
     drawThresholds();
+    buildQualities();
+    renderVideo(state.t);
     startVideo();
     refreshControls();
   }
@@ -239,16 +244,73 @@
   // Video ---------------------------------------------------------------------------
 
   const video = $("video");
+  const qualitySelect = $("quality-select");
+  const VIDEO_LOST_MS = 3000; // the robot reports no stream for this browser: start one
   let videoRetry = null;
+  let videoMissingSince = null;
+
+  function storageGet(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null; // private mode or blocked storage: just do not remember
+    }
+  }
+
+  function storageSet(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // as above
+    }
+  }
+
+  state.videoChoice = storageGet("video-quality");
+
+  // What this browser watches: its own choice, else Low with the browser's data saver on,
+  // else the robot's default
+  function videoQuality() {
+    const v = state.hello && state.hello.video;
+    const names = v ? v.qualities.map((q) => q.name) : [];
+    const choice = state.videoChoice;
+    if (choice === "auto" || choice === "off" || names.includes(choice)) return choice;
+    if (navigator.connection && navigator.connection.saveData && names.includes("low")) {
+      return "low";
+    }
+    return v ? v.default : "auto";
+  }
+
+  // The robot's qualities go between Auto and Off, described from its own settings
+  function buildQualities() {
+    const off = qualitySelect.querySelector('option[value="off"]');
+    for (const option of [...qualitySelect.options]) {
+      if (option !== off && option.value !== "auto") option.remove();
+    }
+    for (const q of state.hello.video.qualities) {
+      const option = document.createElement("option");
+      option.value = q.name;
+      option.textContent = `${QUALITY_NAMES[q.name] || q.name}, ${q.width} px wide, ` +
+        `up to ${q.fps} fps`;
+      qualitySelect.insertBefore(option, off);
+    }
+    qualitySelect.value = videoQuality();
+  }
 
   function startVideo() {
     clearTimeout(videoRetry);
-    if (document.hidden || !state.connected) return;
-    video.src = `/stream.mjpg?t=${Date.now()}`;
+    videoMissingSince = null;
+    const quality = videoQuality();
+    if (document.hidden || !state.connected || quality === "off") return;
+    // The client id lets the robot switch this stream's quality without a reconnect and
+    // report its frame rate back in the telemetry
+    const query = new URLSearchParams({ quality, client: state.hello.id, t: Date.now() });
+    video.src = `/stream.mjpg?${query}`;
+    state.videoStreaming = true;
   }
 
   function stopVideo() {
     clearTimeout(videoRetry);
+    state.videoStreaming = false;
     // Replacing the source closes the stream connection
     video.src = BLANK_IMAGE;
   }
@@ -258,20 +320,96 @@
     videoRetry = setTimeout(startVideo, 2000);
   });
 
+  // The menu's native popup takes the keyboard: a drive key held while it opens never sees
+  // its keyup and would keep the robot driving. Let go of everything first
+  qualitySelect.addEventListener("pointerdown", () => stopDriving());
+  qualitySelect.addEventListener("focus", () => stopDriving());
+  qualitySelect.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === "F4" ||
+        (event.altKey && event.key.startsWith("Arrow"))) stopDriving();
+  });
+
+  qualitySelect.addEventListener("change", () => {
+    const quality = qualitySelect.value;
+    const before = videoQuality();
+    state.videoChoice = quality;
+    storageSet("video-quality", quality);
+    if (quality === "off") {
+      stopVideo();
+    } else if (before !== "off" && state.videoStreaming && state.t && state.t.video) {
+      // The open stream changes over on the robot, with no gap in the picture
+      send({ type: "video", quality });
+    } else {
+      startVideo();
+    }
+    renderVideo(state.t);
+    // Let go of the menu so the arrow keys drive again
+    qualitySelect.blur();
+  });
+
+  function bitrate(kbps) {
+    return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mb/s` : `${kbps} kb/s`;
+  }
+
+  // The chip names the setting and, once frames flow, what this browser actually gets
+  function renderQuality(t) {
+    const quality = videoQuality();
+    const stats = quality !== "off" && t && t.video;
+    $("quality-name").textContent = QUALITY_NAMES[quality] || quality;
+    const res = $("quality-res");
+    const rate = $("quality-rate");
+    const chip = $("quality");
+    chip.dataset.quality = quality;
+    if (stats && stats.height && stats.fps > 0) {
+      res.textContent = `${stats.height}p`;
+      rate.textContent = `${Math.round(stats.fps)} fps, ${bitrate(stats.kbps)}`;
+      const auto = quality === "auto" ? ` (Auto chose ${QUALITY_NAMES[stats.profile]})` : "";
+      chip.title = `Video quality: ${stats.width} × ${stats.height}${auto}, ` +
+        `${stats.fps} frames a second, ${bitrate(stats.kbps)}`;
+    } else {
+      res.textContent = "";
+      rate.textContent = "";
+      chip.title = "Video quality";
+    }
+    if (qualitySelect.value !== quality && document.activeElement !== qualitySelect) {
+      qualitySelect.value = quality;
+    }
+  }
+
+  // A stream the robot dropped (it stalled) ends without an error event in some browsers.
+  // The robot reports this browser's stream in every state message, so notice it is gone
+  function checkStream(t) {
+    if (!state.videoStreaming || t.video) {
+      videoMissingSince = null;
+    } else if (videoMissingSince === null) {
+      videoMissingSince = performance.now();
+    } else if (performance.now() - videoMissingSince > VIDEO_LOST_MS) {
+      startVideo();
+    }
+  }
+
   function renderVideo(t) {
-    const live = t.video_age !== null && t.video_age < VIDEO_STALE_S;
-    app.dataset.video = live ? "live" : "waiting";
-    if (live) return;
+    renderQuality(t);
+    if (t) checkStream(t);
     let title = "Waiting for video";
     let sub = "The camera stream starts in a moment";
-    if (t.mode !== "drive" && t.mode_status === "starting") {
+    if (videoQuality() === "off") {
+      title = "Video is off";
+      sub = "Saves Wi-Fi and the robot's CPU. Pick a quality to watch again.";
+    } else if (t && t.mode !== "drive" && t.mode_status === "starting") {
       title = `Starting the ${t.mode} detector`;
       sub = "Its annotated view appears here once it runs";
-    } else if (t.mode !== "drive") {
+    } else if (t && t.mode !== "drive") {
       sub = "Waiting for the detector's annotated view";
     }
+    // Also what shows when the telemetry goes quiet, so keep it current even while live
     $("video-empty-title").textContent = title;
     $("video-empty-sub").textContent = sub;
+    if (videoQuality() === "off") {
+      app.dataset.video = "off";
+    } else if (t) {
+      app.dataset.video = t.video_age !== null && t.video_age < VIDEO_STALE_S ? "live" : "waiting";
+    }
   }
 
   document.addEventListener("visibilitychange", () => {
@@ -429,7 +567,7 @@
   setInterval(() => {
     if (!state.connected || performance.now() - state.lastState > STATE_STALE_MS) {
       for (const side of Object.values(sides)) setSide(side, null);
-      app.dataset.video = "waiting";
+      if (app.dataset.video !== "off") app.dataset.video = "waiting";
     }
   }, 250);
 
@@ -439,6 +577,7 @@
   const knob = $("joy-knob");
   const joy = { pointer: null, x: 0, y: 0 };
   const keys = new Set();
+  const ignoredKeys = new Set(); // pressed on the slider or the menu: not for driving
   const DRIVE_KEYS = {
     KeyW: [1, 0], ArrowUp: [1, 0], KeyS: [-1, 0], ArrowDown: [-1, 0],
     KeyA: [0, 1], ArrowLeft: [0, 1], KeyD: [0, -1], ArrowRight: [0, -1],
@@ -684,8 +823,12 @@
       if (!state.estop) engage();
       return;
     }
-    const onSlider = document.activeElement === speedRange;
-    if (DRIVE_KEYS[event.code] && !(onSlider && event.code.startsWith("Arrow"))) {
+    // Arrow keys adjust a focused slider or menu instead of driving. A key held there keeps
+    // not driving after the control lets go of focus, while it auto-repeats
+    const onControl = document.activeElement === speedRange ||
+      document.activeElement === qualitySelect;
+    if (onControl && event.code.startsWith("Arrow")) ignoredKeys.add(event.code);
+    if (DRIVE_KEYS[event.code] && !ignoredKeys.has(event.code)) {
       event.preventDefault();
       if (!event.repeat && !canControl()) toast(lockReason());
       keys.add(event.code);
@@ -694,6 +837,7 @@
   window.addEventListener("keyup", (event) => {
     if (event.code === "Space") event.preventDefault();
     keys.delete(event.code);
+    ignoredKeys.delete(event.code);
   });
 
   // Modes -------------------------------------------------------------------------------

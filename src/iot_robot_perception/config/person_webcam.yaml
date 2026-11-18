@@ -16,4 +16,5 @@ person_detector:
     keypoint_threshold: 0.5
     person_height: 1.70
     torso_ratio: 0.29
-    num_threads: 4
+    num_threads: 4               # pose model
+    reid_threads: 1              # ReID, once per person; more threads are slower

@@ -4,7 +4,8 @@ from collections import deque
 
 import cv2
 import numpy as np
-import onnxruntime as ort
+
+from iot_robot_perception.inference import onnx_session
 
 # ImageNet statistics (RGB) that the OSNet weights were trained with
 MEAN = np.array([0.485, 0.456, 0.406], np.float32)
@@ -14,11 +15,8 @@ STD = np.array([0.229, 0.224, 0.225], np.float32)
 class ReidEncoder:
     """Turn a person crop into a unit-length appearance vector."""
 
-    def __init__(self, model_path, num_threads):
-        options = ort.SessionOptions()
-        options.intra_op_num_threads = num_threads
-        self.session = ort.InferenceSession(
-            model_path, options, providers=["CPUExecutionProvider"])
+    def __init__(self, model_path, num_threads, spinning=False):
+        self.session = onnx_session(model_path, num_threads, spinning)
         model_input = self.session.get_inputs()[0]
         self.input_name = model_input.name
         # Shape is (batch, channels, height, width), 256 x 128 for OSNet
